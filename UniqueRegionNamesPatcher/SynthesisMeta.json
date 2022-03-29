@@ -1,0 +1,8 @@
+{
+  "Nickname": "UniqueRegionNamesPatcher",
+  "Visibility": "Visible",
+  "OneLineDescription": "Synthesis patcher for the Unique Region Names mod.",
+  "LongDescription": "",
+  "PreferredAutoVersioning": "Default",
+  "RequiredMods": [ "Unique Region Names.esp" ]
+}
