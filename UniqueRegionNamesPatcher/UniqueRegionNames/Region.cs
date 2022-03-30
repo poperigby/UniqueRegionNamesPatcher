@@ -1,12 +1,14 @@
+using Mutagen.Bethesda.Plugins;
 using Mutagen.Bethesda.Skyrim;
 
 namespace Mutagen.Bethesda.FormKeys.SkyrimSE
 {
     public static partial class UniqueRegionNames
     {
+        internal readonly static ModKey ModKey = ModKey.FromNameAndExtension("Unique Region Names.esp");
+
         public static class Region
         {
-            private readonly static ModKey ModKey = ModKey.FromNameAndExtension("UniqueRegionNames.esp");
             private static FormLink<IRegionGetter> Construct(uint id) => new FormLink<IRegionGetter>(ModKey.MakeFormKey(id));
             public static FormLink<IRegionGetter> xxxMapReach => Construct(0x800);
             public static FormLink<IRegionGetter> xxxMapFalkreath => Construct(0x801);
