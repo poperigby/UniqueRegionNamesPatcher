@@ -349,3 +349,6 @@ healthchecksdb
 MigrationBackup/
 /cellmap.pdn
 */out/*
+/ParseImage/ParseImage/images/cellmap.pdn
+/ParseImage/ParseImage/images/cellmap.png
+/ParseImage/ParseImage/images/cellmapfull.png
