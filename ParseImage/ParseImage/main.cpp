@@ -5,6 +5,7 @@
 #include <env.hpp>
 #include <envpath.hpp>
 #include <fileio.hpp>
+
 #include <opencv2/opencv.hpp>
 
 using position = long long;
@@ -20,12 +21,10 @@ template<std::integral T>
 struct basic_point : std::pair<T, T> {
 	using base = std::pair<T, T>;
 
-	T& x{ this->first };
-	T& y{ this->second };
+	T& x;
+	T& y;
 
-	using base::base; // inherit constructors
-
-	basic_point(cv::Point p) : base(p.x, p.y) {}
+	constexpr basic_point(const T& x, const T& y) : base(x, y), x{ this->first }, y{ this->second } {}
 
 	basic_point<T>& operator=(const basic_point<T>& o)
 	{
@@ -45,10 +44,11 @@ template<std::integral T>
 struct basic_size : std::pair<T, T> {
 	using base = std::pair<T, T>;
 
-	T& width{ this->first };
-	T& height{ this->second };
+	T& width;
+	T& height;
 
-	using base::base; // inherit constructors
+	constexpr basic_size(const T& x, const T& y) : base(x, y), width{ this->first }, height{ this->second } {}
+
 	using base::operator=;
 
 	basic_size(cv::Size sz) : base(sz.width, sz.height) {}
@@ -110,6 +110,10 @@ struct Image {
 	}
 };
 
+using RGB = color::RGB<uchar>;
+
+inline color::RGB<uchar> Vec3b_to_RGB(cv::Vec3b&& bgr) { return{ bgr[2], bgr[1], bgr[0] }; }
+
 enum class HoldCapital : char {
 	None,
 	Solitude,
@@ -123,10 +127,92 @@ enum class HoldCapital : char {
 	Riften,
 };
 
+inline std::ostream& operator<<(std::ostream& os, const HoldCapital& hc)
+{
+	switch (hc) {
+	case HoldCapital::Solitude:
+		os << "Solitude";
+		break;
+	case HoldCapital::Morthal:
+		os << "Morthal";
+		break;
+	case HoldCapital::Markarth:
+		os << "Markarth";
+		break;
+	case HoldCapital::Whiterun:
+		os << "Whiterun";
+		break;
+	case HoldCapital::Falkreath:
+		os << "Falkreath";
+		break;
+	case HoldCapital::Dawnstar:
+		os << "Dawnstar";
+		break;
+	case HoldCapital::Winterhold:
+		os << "Winterhold";
+		break;
+	case HoldCapital::Windhelm:
+		os << "Windhelm";
+		break;
+	case HoldCapital::Riften:
+		os << "Riften";
+		break;
+	case HoldCapital::None: [[fallthrough]];
+	default:break;
+	}
+	return os;
+}
+
+using ColorMap = std::map<RGB, HoldCapital>;
+using HoldMap = std::vector<std::pair<Point, std::vector<HoldCapital>>>;
+
+inline std::ostream& operator<<(std::ostream& os, const HoldMap& hm)
+{
+	os << "[HoldMap]\n"
+		<< "; Entries are in the following format:\n"
+		<< "; <X>_<Y> = [ \"HoldCapital\" ... ]\n"
+		;
+
+	for (const auto& [pos, holds] : hm) {
+		os << pos.first << '_' << pos.second << " = [ ";
+		for (auto it{ holds.begin() }; it != holds.end(); ++it) {
+			os << '\"' << *it << "\"";
+			if (std::distance(it, holds.end()) > 1)
+				os << ", ";
+		}
+		os << " ]\n";
+	}
+	return os;
+}
+
+/**
+ * @brief		Handle the offset & flipped coordinates issue
+ * @param p
+ * @return
+*/
+constexpr Point offsetCellCoordinates(const Point& p, const Point& pMin = { 0, 0 }, const Point& pMax = { 149, 99 })
+{
+	const Point cellMin{ -74, 49 }, cellMax{ 75, -50 };
+
+	const auto& translateAxis{ [](const auto& v, const auto& oldMin, const auto& oldMax, const auto& newMin, const auto& newMax) {
+		if (oldMin == oldMax || newMin == newMax)
+			throw make_exception("Invalid translation: ( ", oldMin, " - ", oldMax, " ) => ( ", newMin, " - ", newMax, " )");
+		const auto
+			& oldRange{ oldMax - oldMin },
+			& newRange{ newMax - newMin };
+		return (((v - oldMin) * newRange) / oldRange) + newMin;
+	} };
+
+	return{
+		translateAxis(p.x, pMin.x, pMax.x, cellMin.x, cellMax.x),
+		translateAxis(p.y, pMin.y, pMax.y, cellMin.y, cellMax.y)
+	};
+}
+
 int main(const int argc, char** argv)
 {
 	// this corresponds to the colors used in cellmap.png to indicate 
-	const std::map<color::RGB<unsigned char>, HoldCapital> colormap{
+	const ColorMap colormap{
 		{ { 0xFF, 0x6D, 0x70 }, HoldCapital::Solitude },
 		{ { 0x31, 0x70, 0x37 }, HoldCapital::Morthal },
 		{ { 0x82, 0xD3, 0x7C }, HoldCapital::Markarth },
@@ -138,7 +224,7 @@ int main(const int argc, char** argv)
 		{ { 0xBC, 0x7A, 0xFF }, HoldCapital::Riften },
 	};
 	try {
-		opt::ParamsAPI2 args{ argc, argv, 'f', "file", 'd', "dim", 't', "timeout" };
+		opt::ParamsAPI2 args{ argc, argv, 'f', "file", 'd', "dim", 't', "timeout", 'o', "out" };
 		env::PATH PATH;
 		const auto& [myPath, myName] { PATH.resolve_split(argv[0]) };
 
@@ -149,12 +235,14 @@ int main(const int argc, char** argv)
 				<< "  " << std::filesystem::path(myName).replace_extension().generic_string() << " <OPTIONS>" << '\n'
 				<< '\n'
 				<< "OPTIONS:\n"
-				<< "  -h  --help            Shows this usage guide." << '\n'
-				<< "  -f  --file <PATH>     Specify an image to load." << '\n'
-				<< "  -d  --dim <X:Y>       Specify the cell dimensions." << '\n'
-				<< "      --display         Opens a window to display the loaded image file." << '\n'
+				<< "  -h  --help            Shows this usage guide.\n"
+				<< "  -f  --file <PATH>     Specify an image to load.\n"
+				<< "  -o  --out <PATH>      Specify a filepath to export the results to. Defaults to the name of the image\n"
+				<< "                         file with the extension '.ini', in the current working directory.\n"
+				<< "  -d  --dim <X:Y>       Specify the cell dimensions.\n"
+				<< "      --display         Opens a window to display the loaded image file.\n"
 				<< "  -t  --timeout <ms>    When '--display' is specified, closes the display window after '<ms>' milliseconds.\n"
-				<< "                         a value of 0 will wait forever, which is the default behaviour."
+				<< "                         a value of 0 will wait forever, which is the default behaviour.\n"
 				<< std::endl;
 		}
 
@@ -183,27 +271,70 @@ int main(const int argc, char** argv)
 						const length& cols{ img.image.cols / partSize.width };
 						const length& rows{ img.image.rows / partSize.height };
 
-						cv::Mat partition{ img.image.size(), img.image.type(), cv::Scalar::all };
-
 						bool display_each{ args.checkopt("display") };
 						const std::string windowName{ "Display" };
-
-						long long i = 0;
 
 						if (display_each)
 							cv::namedWindow(windowName); // open a window
 
+						HoldMap vec;
+						vec.reserve(cols * rows);
+
+						const auto& identify_colors{ [&colormap](cv::Mat&& part) {
+							std::vector<HoldCapital> detected;
+							detected.reserve(colormap.size());
+
+							const auto& channels{ part.channels() };
+							if (channels != 3)
+								throw make_exception("This program requires an image with at least 3 channels!");
+							auto rows{ part.rows }, cols{ part.cols };
+
+							for (int y{ 0 }; y < rows; ++y) {
+								for (int x{ 0 }; x < cols; ++x) {
+									const Point& pos{ x, y };
+									if (RGB color{ Vec3b_to_RGB(std::move(part.at<cv::Vec3b>(pos))) }; colormap.contains(color)) {
+										if (HoldCapital det{ colormap.at(color) }; !std::any_of(detected.begin(), detected.end(), [&det](auto&& hc) -> bool { return det == hc; })) {
+											detected.emplace_back(det);
+											std::clog << "  + " << det << '\n';
+										}
+									}
+								}
+							}
+
+							detected.shrink_to_fit();
+							return detected;
+						} };
+
+						size_t i = 0;
 						for (length y{ 0 }; y < rows; ++y) {
 							for (length x{ 0 }; x < cols; ++x, ++i) {
 								const auto& rect{ Rectangle(x * partSize.width, y * partSize.height, partSize.width, partSize.height) };
-								const auto& part{ img.image(rect) };
+								auto part{ img.image(rect) };
+								const auto& cellPos{ offsetCellCoordinates(Point{ x, y }) };
+								std::clog << "Processing Partition #" << i << '\n'
+									<< "  Partition Index:   ( " << x << ", " << y << " )\n"
+									<< "  Cell Coordinates:  ( " << cellPos.x << ", " << cellPos.y << ")\n";
 								if (display_each) {
-									std::clog << "Displaying Partition #" << i << "\n  Location: ( " << x << ", " << y << " )\n";
 									cv::imshow(windowName, part); // display the image in the window
 									cv::waitKey(windowTimeout);
 								}
+								if (auto results{ identify_colors(std::move(part)) }; !results.empty()) {
+									vec.emplace_back(std::make_pair(cellPos, std::move(results)));
+								}
 							}
 						}
+
+						std::clog << "Finished processing image partitions." << std::endl;
+						std::clog << "Found " << vec.size() << " partitions with valid color map data." << std::endl;
+
+						vec.shrink_to_fit();
+
+						std::filesystem::path outpath{ path.filename() };
+						outpath.replace_extension(".ini");
+						if (const auto& outArg{ args.typegetv_any<opt::Flag, opt::Option>('o', "out") }; outArg.has_value())
+							outpath = outArg.value(); // override the output path
+
+						file::write(outpath, vec);
 
 						if (display_each)
 							cv::destroyWindow(windowName);
