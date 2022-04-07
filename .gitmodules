@@ -1,6 +1,3 @@
 [submodule "ParseImage/307lib"]
 	path = ParseImage/307lib
 	url = https://github.com/radj307/307lib
-[submodule "ParseImage/opencv"]
-	path = ParseImage/opencv
-	url = https://github.com/opencv/opencv
