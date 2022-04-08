@@ -1,7 +1,8 @@
+using Mutagen.Bethesda;
 using Mutagen.Bethesda.Plugins;
 using Mutagen.Bethesda.Skyrim;
 
-namespace Mutagen.Bethesda.FormKeys.SkyrimSE
+namespace UniqueRegionNamesPatcher.UniqueRegionNames
 {
     public static partial class UniqueRegionNames
     {
@@ -9,7 +10,7 @@ namespace Mutagen.Bethesda.FormKeys.SkyrimSE
 
         public static class Region
         {
-            private static FormLink<IRegionGetter> Construct(uint id) => new FormLink<IRegionGetter>(ModKey.MakeFormKey(id));
+            private static FormLink<IRegionGetter> Construct(uint id) => new(ModKey.MakeFormKey(id));
             public static FormLink<IRegionGetter> xxxMapReach => Construct(0x800);
             public static FormLink<IRegionGetter> xxxMapFalkreath => Construct(0x801);
             public static FormLink<IRegionGetter> xxxMapWinterholdHold => Construct(0x802);

@@ -114,82 +114,90 @@ using RGB = color::RGB<uchar>;
 
 inline color::RGB<uchar> Vec3b_to_RGB(cv::Vec3b&& bgr) { return{ bgr[2], bgr[1], bgr[0] }; }
 
-enum class HoldCapital : char {
+enum class Region : char {
 	None,
-	Solitude,
-	Morthal,
-	Markarth,
-	Whiterun,
-	Falkreath,
-	Dawnstar,
-	Winterhold,
-	Windhelm,
-	Riften,
+	Solitude,			// Haafingar
+	Morthal_Hold,		// Hjaalmarch
+	Markarth,			// Reach
+	Whiterun,			// Whiterun
+	Falkreath,			// Falkreath
+	Dawnstar,			// Pale
+	Winterhold_Hold,	// Winterhold
+	Windhelm,			// Eastmarch
+	Riften,				// Rift
+
+	Riverwood,			// Riverwood
+	Winterhold,			// Winterhold City
+	Helgen,				// Helgen
+	Rorikstead,			// Rorikstead
+	Morthal,			// Morthal City
 };
 
-inline std::ostream& operator<<(std::ostream& os, const HoldCapital& hc)
+inline std::ostream& operator<<(std::ostream& os, const Region& hc)
 {
 	switch (hc) {
-	case HoldCapital::Solitude:
-		os << "Solitude";
+	case Region::Solitude:
+		os << "Haafingar";
 		break;
-	case HoldCapital::Morthal:
+	case Region::Morthal_Hold:
+		os << "Hjaalmarch";
+		break;
+	case Region::Morthal:
 		os << "Morthal";
 		break;
-	case HoldCapital::Markarth:
-		os << "Markarth";
+	case Region::Markarth:
+		os << "Reach";
 		break;
-	case HoldCapital::Whiterun:
+	case Region::Whiterun:
 		os << "Whiterun";
 		break;
-	case HoldCapital::Falkreath:
+	case Region::Riverwood:
+		os << "Riverwood";
+		break;
+	case Region::Rorikstead:
+		os << "Rorikstead";
+		break;
+	case Region::Falkreath:
 		os << "Falkreath";
 		break;
-	case HoldCapital::Dawnstar:
-		os << "Dawnstar";
+	case Region::Dawnstar:
+		os << "Pale";
 		break;
-	case HoldCapital::Winterhold:
+	case Region::Winterhold:
 		os << "Winterhold";
 		break;
-	case HoldCapital::Windhelm:
-		os << "Windhelm";
+	case Region::Windhelm:
+		os << "Eastmarch";
 		break;
-	case HoldCapital::Riften:
-		os << "Riften";
+	case Region::Riften:
+		os << "Rift";
 		break;
-	case HoldCapital::None: [[fallthrough]];
+	case Region::None: [[fallthrough]];
 	default:break;
 	}
 	return os;
 }
 
-using ColorMap = std::map<RGB, HoldCapital>;
-using HoldMap = std::vector<std::pair<Point, std::vector<HoldCapital>>>;
+using ColorMap = std::map<RGB, Region>;
+using HoldMap = std::vector<std::pair<Point, std::vector<Region>>>;
 
 inline std::ostream& operator<<(std::ostream& os, const HoldMap& hm)
 {
-	os << "[HoldMap]\n"
-		<< "; Entries are in the following format:\n"
-		<< "; <X>_<Y> = [ \"HoldCapital\" ... ]\n"
-		;
+	os << "[HoldMap]\n";
 
 	for (const auto& [pos, holds] : hm) {
-		os << pos.first << '_' << pos.second << " = [ ";
+		os << '(' << pos.first << ',' << pos.second << ")=[";
 		for (auto it{ holds.begin() }; it != holds.end(); ++it) {
 			os << '\"' << *it << "\"";
 			if (std::distance(it, holds.end()) > 1)
-				os << ", ";
+				os << ",";
 		}
-		os << " ]\n";
+		os << "]\n";
 	}
 	return os;
 }
 
-/**
- * @brief		Handle the offset & flipped coordinates issue
- * @param p
- * @return
-*/
+/// @brief	Translates index coordinates (origin 0,0 top-left) to cell coordinates (origin -74, 49 top-left)
 constexpr Point offsetCellCoordinates(const Point& p, const Point& pMin = { 0, 0 }, const Point& pMax = { 149, 99 })
 {
 	const Point cellMin{ -74, 49 }, cellMax{ 75, -50 };
@@ -213,15 +221,21 @@ int main(const int argc, char** argv)
 {
 	// this corresponds to the colors used in cellmap.png to indicate 
 	const ColorMap colormap{
-		{ { 0xFF, 0x6D, 0x70 }, HoldCapital::Solitude },
-		{ { 0x31, 0x70, 0x37 }, HoldCapital::Morthal },
-		{ { 0x82, 0xD3, 0x7C }, HoldCapital::Markarth },
-		{ { 0xFF, 0xD3, 0x7C }, HoldCapital::Whiterun },
-		{ { 0xD8, 0xFF, 0x77 }, HoldCapital::Falkreath },
-		{ { 0xB5, 0x7E, 0x9B }, HoldCapital::Dawnstar },
-		{ { 0xBF, 0xD1, 0xBC }, HoldCapital::Winterhold },
-		{ { 0x80, 0xB8, 0xCE }, HoldCapital::Windhelm },
-		{ { 0xBC, 0x7A, 0xFF }, HoldCapital::Riften },
+		{ { 0xFF, 0x6D, 0x70 }, Region::Solitude },
+		{ { 0x31, 0x70, 0x37 }, Region::Morthal_Hold },
+		{ { 0x82, 0xD3, 0x7C }, Region::Markarth },
+		{ { 0xFF, 0xD3, 0x7C }, Region::Whiterun },
+		{ { 0xD8, 0xFF, 0x77 }, Region::Falkreath },
+		{ { 0xB5, 0x7E, 0x9B }, Region::Dawnstar },
+		{ { 0xBF, 0xD1, 0xBC }, Region::Winterhold_Hold },
+		{ { 0x80, 0xB8, 0xCE }, Region::Windhelm },
+		{ { 0xBC, 0x7A, 0xFF }, Region::Riften },
+
+		{ { 0xFF, 0xB6, 0x7C }, Region::Riverwood },
+		{ { 0xBF, 0xD1, 0xFF }, Region::Winterhold },
+		{ { 0xBE, 0xFF, 0x77 }, Region::Helgen },
+		{ { 0xC6, 0xFF, 0x7C }, Region::Rorikstead },
+		{ { 0x31, 0xA0, 0x37 }, Region::Morthal },
 	};
 	try {
 		opt::ParamsAPI2 args{ argc, argv, 'f', "file", 'd', "dim", 't', "timeout", 'o', "out" };
@@ -281,7 +295,7 @@ int main(const int argc, char** argv)
 						vec.reserve(cols * rows);
 
 						const auto& identify_colors{ [&colormap](cv::Mat&& part) {
-							std::vector<HoldCapital> detected;
+							std::vector<Region> detected;
 							detected.reserve(colormap.size());
 
 							const auto& channels{ part.channels() };
@@ -293,7 +307,7 @@ int main(const int argc, char** argv)
 								for (int x{ 0 }; x < cols; ++x) {
 									const Point& pos{ x, y };
 									if (RGB color{ Vec3b_to_RGB(std::move(part.at<cv::Vec3b>(pos))) }; colormap.contains(color)) {
-										if (HoldCapital det{ colormap.at(color) }; !std::any_of(detected.begin(), detected.end(), [&det](auto&& hc) -> bool { return det == hc; })) {
+										if (Region det{ colormap.at(color) }; !std::any_of(detected.begin(), detected.end(), [&det](auto&& hc) -> bool { return det == hc; })) {
 											detected.emplace_back(det);
 											std::clog << "  + " << det << '\n';
 										}
@@ -334,7 +348,10 @@ int main(const int argc, char** argv)
 						if (const auto& outArg{ args.typegetv_any<opt::Flag, opt::Option>('o', "out") }; outArg.has_value())
 							outpath = outArg.value(); // override the output path
 
-						file::write(outpath, vec);
+						if (file::write(outpath, vec)) {
+							std::clog << "Successfully saved the lookup matrix to " << outpath << std::endl;
+						}
+						else throw make_exception("Failed to write to output file ", outpath, "!");
 
 						if (display_each)
 							cv::destroyWindow(windowName);
