@@ -15,6 +15,11 @@ namespace UniqueRegionNamesPatcher.util
             Y = point.Item2;
         }
 
+        public static CellCoordinate FromSubBlock(short x, short y)
+        {
+            return new CellCoordinate(x * 8, y * 8);
+        }
+
         /// <summary>
         /// Cell Coordinate X-Axis.
         /// </summary>

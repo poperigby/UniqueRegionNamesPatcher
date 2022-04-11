@@ -1,85 +1,25 @@
 #include "LogRedirect.hpp"
+#include "types.hpp"
+#include "output_operators.hpp"
+#include "PartitionStats.hpp"
 
 #include <TermAPI.hpp>
 #include <ParamsAPI2.hpp>
 #include <env.hpp>
 #include <envpath.hpp>
 #include <fileio.hpp>
+#include <INIRedux.hpp>
 
 #include <opencv2/opencv.hpp>
 
-using position = long long;
-using length = long long;
-
-// forward declare
-template<std::integral T> struct basic_point;
-template<std::integral T> struct basic_size;
-template<std::integral T> struct basic_rectangle;
-
-// 2D point type
-template<std::integral T>
-struct basic_point : std::pair<T, T> {
-	using base = std::pair<T, T>;
-
-	T& x;
-	T& y;
-
-	constexpr basic_point(const T& x, const T& y) : base(x, y), x{ this->first }, y{ this->second } {}
-
-	basic_point<T>& operator=(const basic_point<T>& o)
-	{
-		x = o.x;
-		y = o.y;
-		return *this;
-	}
-
-	// conversion operator
-	operator basic_size<T>() const { return{ x, y }; }
-	operator cv::Point() const { return cv::Point(x, y); }
-};
-using Point = basic_point<position>;
-
-// 2D size type
-template<std::integral T>
-struct basic_size : std::pair<T, T> {
-	using base = std::pair<T, T>;
-
-	T& width;
-	T& height;
-
-	constexpr basic_size(const T& x, const T& y) : base(x, y), width{ this->first }, height{ this->second } {}
-
-	using base::operator=;
-
-	basic_size(cv::Size sz) : base(sz.width, sz.height) {}
-
-	basic_size<T>& operator=(const basic_size<T>& o)
-	{
-		width = o.width;
-		height = o.height;
-		return *this;
-	}
-
-	// conversion operator
-	operator basic_point<T>() const { return{ width, height }; }
-	operator cv::Size() const { return cv::Size(width, height); }
-};
-using Size = basic_size<position>;
-
-template<std::integral T>
-struct basic_rectangle : basic_point<T>, basic_size<T> {
-	using basepoint = basic_point<T>;
-	using basesize = basic_size<T>;
-
-	basic_rectangle(const basepoint& pos, const basesize& size) : basepoint(pos), basesize(size) {}
-	basic_rectangle(const T& x, const T& y, const T& width, const T& height) : basepoint(x, y), basesize(width, height) {}
-	basic_rectangle(cv::Rect rect) : basepoint(rect.x, rect.y), basesize(rect.width, rect.height) {}
-
-	operator cv::Rect() const { return cv::Rect{ static_cast<int>(this->x), static_cast<int>(this->y), static_cast<int>(this->width), static_cast<int>(this->height) }; }
-};
-using Rectangle = basic_rectangle<position>;
-
-template<var::any_same<Point, Size, Rectangle> RetType>
+/**
+ * @brief				Parse a given string by splitting it with one of the given delimiters, then converting both sides to integral types.
+ * @tparam RetType		Either a `Point` or `Size` type.
+ * @param s				Input String
+ * @param seperators	List of characters that are valid delimiters.
+ * @returns				RetType
+ */
+template<var::any_same<Point, Size> RetType>
 RetType parse_string(const std::string& s, const std::string& seperators = ":,")
 {
 	const auto& [xstr, ystr] { str::split(s, seperators) };
@@ -88,114 +28,6 @@ RetType parse_string(const std::string& s, const std::string& seperators = ":,")
 	else throw make_exception("Cannot parse string '", s, "' into a valid pair of integrals!");
 }
 
-template<typename ImageType = cv::Mat>
-struct Image {
-	std::string filepath;
-	ImageType image;
-
-	Image(const std::string& path, const bool& load = true) : filepath{ path }, image{ load ? cv::imread(filepath) : ImageType{} } {}
-
-	bool exists() const { return file::exists(filepath); }
-	bool loaded() const { return !image.empty(); }
-
-	void openDisplay() const
-	{
-		cv::namedWindow(filepath);
-
-		cv::imshow(filepath, image);
-	}
-	void closeDisplay() const
-	{
-		cv::destroyWindow(filepath);
-	}
-};
-
-using RGB = color::RGB<uchar>;
-
-inline color::RGB<uchar> Vec3b_to_RGB(cv::Vec3b&& bgr) { return{ bgr[2], bgr[1], bgr[0] }; }
-
-enum class Region : char {
-	None,
-	Solitude,			// Haafingar
-	Morthal_Hold,		// Hjaalmarch
-	Markarth,			// Reach
-	Whiterun,			// Whiterun
-	Falkreath,			// Falkreath
-	Dawnstar,			// Pale
-	Winterhold_Hold,	// Winterhold
-	Windhelm,			// Eastmarch
-	Riften,				// Rift
-
-	Riverwood,			// Riverwood
-	Winterhold,			// Winterhold City
-	Helgen,				// Helgen
-	Rorikstead,			// Rorikstead
-	Morthal,			// Morthal City
-};
-
-inline std::ostream& operator<<(std::ostream& os, const Region& hc)
-{
-	switch (hc) {
-	case Region::Solitude:
-		os << "Haafingar";
-		break;
-	case Region::Morthal_Hold:
-		os << "Hjaalmarch";
-		break;
-	case Region::Morthal:
-		os << "Morthal";
-		break;
-	case Region::Markarth:
-		os << "Reach";
-		break;
-	case Region::Whiterun:
-		os << "Whiterun";
-		break;
-	case Region::Riverwood:
-		os << "Riverwood";
-		break;
-	case Region::Rorikstead:
-		os << "Rorikstead";
-		break;
-	case Region::Falkreath:
-		os << "Falkreath";
-		break;
-	case Region::Dawnstar:
-		os << "Pale";
-		break;
-	case Region::Winterhold:
-		os << "Winterhold";
-		break;
-	case Region::Windhelm:
-		os << "Eastmarch";
-		break;
-	case Region::Riften:
-		os << "Rift";
-		break;
-	case Region::None: [[fallthrough]];
-	default:break;
-	}
-	return os;
-}
-
-using ColorMap = std::map<RGB, Region>;
-using HoldMap = std::vector<std::pair<Point, std::vector<Region>>>;
-
-inline std::ostream& operator<<(std::ostream& os, const HoldMap& hm)
-{
-	os << "[HoldMap]\n";
-
-	for (const auto& [pos, holds] : hm) {
-		os << '(' << pos.first << ',' << pos.second << ")=[";
-		for (auto it{ holds.begin() }; it != holds.end(); ++it) {
-			os << '\"' << *it << "\"";
-			if (std::distance(it, holds.end()) > 1)
-				os << ",";
-		}
-		os << "]\n";
-	}
-	return os;
-}
 
 /// @brief	Translates index coordinates (origin 0,0 top-left) to cell coordinates (origin -74, 49 top-left)
 constexpr Point offsetCellCoordinates(const Point& p, const Point& pMin = { 0, 0 }, const Point& pMax = { 149, 99 })
@@ -217,28 +49,34 @@ constexpr Point offsetCellCoordinates(const Point& p, const Point& pMin = { 0, 0
 	};
 }
 
+inline ColorMap ReadColorMap(file::INI const& ini) noexcept(false)
+{
+	if (!ini.check("colormap"))
+		throw make_exception("Failed to locate the '[colormap]' section!");
+
+	const file::INI::INIContainer::SectionContent& section{ ini.get_section("colormap") };
+
+	ID lastID{ 0 };
+
+	ColorMap map;
+	for (const auto& [key, val] : section) {
+		std::string hexstr{ file::ini::to_string(val) };
+
+		if (hexstr.size() == 6ull && std::all_of(hexstr.begin(), hexstr.end(), color::ishexnum))
+			map.insert_or_assign(color::hex_to_rgb<unsigned char>(std::move(hexstr), { 0, 255 }), Region{ lastID++, key });
+		else
+			std::clog << term::get_warn() << "Skipping key '" << key << "' because '" << hexstr << "' isn't a valid hexadecimal color code!\n";
+	}
+	return map;
+}
+
+
 int main(const int argc, char** argv)
 {
-	// this corresponds to the colors used in cellmap.png to indicate 
-	const ColorMap colormap{
-		{ { 0xFF, 0x6D, 0x70 }, Region::Solitude },
-		{ { 0x31, 0x70, 0x37 }, Region::Morthal_Hold },
-		{ { 0x82, 0xD3, 0x7C }, Region::Markarth },
-		{ { 0xFF, 0xD3, 0x7C }, Region::Whiterun },
-		{ { 0xD8, 0xFF, 0x77 }, Region::Falkreath },
-		{ { 0xB5, 0x7E, 0x9B }, Region::Dawnstar },
-		{ { 0xBF, 0xD1, 0xBC }, Region::Winterhold_Hold },
-		{ { 0x80, 0xB8, 0xCE }, Region::Windhelm },
-		{ { 0xBC, 0x7A, 0xFF }, Region::Riften },
+	using CLK = std::chrono::high_resolution_clock;
 
-		{ { 0xFF, 0xB6, 0x7C }, Region::Riverwood },
-		{ { 0xBF, 0xD1, 0xFF }, Region::Winterhold },
-		{ { 0xBE, 0xFF, 0x77 }, Region::Helgen },
-		{ { 0xC6, 0xFF, 0x7C }, Region::Rorikstead },
-		{ { 0x31, 0xA0, 0x37 }, Region::Morthal },
-	};
 	try {
-		opt::ParamsAPI2 args{ argc, argv, 'f', "file", 'd', "dim", 't', "timeout", 'o', "out" };
+		opt::ParamsAPI2 args{ argc, argv, 'f', "file", 'd', "dim", 'T', "timeout", 'o', "out", 't', "threshold", 'i', "ini" };
 		env::PATH PATH;
 		const auto& [myPath, myName] { PATH.resolve_split(argv[0]) };
 
@@ -253,14 +91,33 @@ int main(const int argc, char** argv)
 				<< "  -f  --file <PATH>     Specify an image to load.\n"
 				<< "  -o  --out <PATH>      Specify a filepath to export the results to. Defaults to the name of the image\n"
 				<< "                         file with the extension '.ini', in the current working directory.\n"
-				<< "  -d  --dim <X:Y>       Specify the cell dimensions.\n"
+				<< "  -d  --dim <X:Y>       Specify the image partition dimensions that the input image is divided into.\n"
 				<< "      --display         Opens a window to display the loaded image file.\n"
-				<< "  -t  --timeout <ms>    When '--display' is specified, closes the display window after '<ms>' milliseconds.\n"
+				<< "  -T  --timeout <ms>    When '--display' is specified, closes the display window after '<ms>' milliseconds.\n"
 				<< "                         a value of 0 will wait forever, which is the default behaviour.\n"
-				<< std::endl;
+				<< "  -t  --threshold <%>   A percentage in the range (0 - 100) that determines the minimum number of matching\n"
+				<< "                         pixels that a partition must have in order for it to be considered part of a region.\n"
+				<< "                         Setting this to `0` will NOT add any regions that don't have at least 1 pixel present!"
+				<< " -i  --ini <PATH>       Specify the location of the INI config file. Default is the current working directory, named 'regions.ini'\n"
+				;
 		}
 
+		file::INI ini;
 
+		if (const auto& path{ myPath / "regions.ini" }; file::exists(path))
+			ini.read(path);
+
+		for (const auto& it : args.typegetv_all<opt::Flag, opt::Option>('i', "ini")) {
+			if (!file::exists(it))
+				throw make_exception("Filepath '", it, "' doesn't exist!");
+			else
+				ini.read(it);
+		}
+
+		if (ini.empty())
+			throw make_exception("Failed to retrieve any valid data from the provided INI config files!");
+
+		const auto& colormap{ ReadColorMap(ini) };
 
 		if (const auto& fileArg{ args.typegetv_any<opt::Flag, opt::Option>('f', "file") }; fileArg.has_value()) {
 			std::filesystem::path path{ fileArg.value() };
@@ -268,12 +125,25 @@ int main(const int argc, char** argv)
 			if (!file::exists(path)) // if the path doesn't exist as-is, attempt to resolve it using the PATH variable.
 				path = PATH.resolve(path, { (path.has_extension() ? path.extension().generic_string() : ""), ".png", ".jpg", ".bmp" });
 
-			int windowTimeout{ args.castgetv_any<int, opt::Flag, opt::Option>(str::stoi, 't', "timeout").value_or(0) };
+			// Keypress timeout for OpenCV display windows
+			const int windowTimeout{ args.castgetv_any<int, opt::Flag, opt::Option>(str::stoi, 'T', "timeout").value_or(0) };
+			// Percentage of pixels required to return a region (region must have at least 1 pixel to be detected by the parser, this is applied after parsing)
+			const float pxThreshold{ args.castgetv_any<float, opt::Flag, opt::Option>([](std::string&& str) -> float {
+				if (std::all_of(std::forward<std::string>(str).begin(), std::forward<std::string>(str).end(), isdigit))
+					return static_cast<float>(str::stoi(std::move(str))) / 100.0f;
+				else throw make_exception("Invalid threshold value '", str, "' contains invalid characters! (Only digits are allowed)");
+			}, 't', "threshold").value_or(0.0f) };
+
+			std::clog
+				<< "Window Timeout:   " << color::setcolor::green << windowTimeout << color::setcolor::reset << '\n'
+				<< "Pixel Threshold:  " << color::setcolor::green << pxThreshold << " / 1.0" << color::setcolor::reset << "  ( " << color::setcolor::green << pxThreshold * 100.0f << '%' << color::setcolor::reset << " )\n";
+
+			std::filesystem::path logpath{ "OpenCV.log" };
 
 			if (file::exists(path)) {
 				LogRedirect streams;
-				streams.redirect(StandardStream::STDOUT | StandardStream::STDERR, "OpenCV.log");
-
+				streams.redirect(StandardStream::STDOUT | StandardStream::STDERR, logpath.generic_string());
+				std::clog << "Redirected " << color::setcolor::red << "STDOUT" << color::setcolor::reset << " & " << color::setcolor::red << "STDERR" << color::setcolor::reset << " to logfile:  " << logpath << '\n';
 
 				if (Image img{ path.generic_string() }; img.loaded()) {
 					std::clog << "Successfully loaded image file '" << path << '\'' << std::endl;
@@ -293,53 +163,41 @@ int main(const int argc, char** argv)
 
 						HoldMap vec;
 						vec.reserve(cols * rows);
-
-						const auto& identify_colors{ [&colormap](cv::Mat&& part) {
-							std::vector<Region> detected;
-							detected.reserve(colormap.size());
-
-							const auto& channels{ part.channels() };
-							if (channels != 3)
-								throw make_exception("This program requires an image with at least 3 channels!");
-							auto rows{ part.rows }, cols{ part.cols };
-
-							for (int y{ 0 }; y < rows; ++y) {
-								for (int x{ 0 }; x < cols; ++x) {
-									const Point& pos{ x, y };
-									if (RGB color{ Vec3b_to_RGB(std::move(part.at<cv::Vec3b>(pos))) }; colormap.contains(color)) {
-										if (Region det{ colormap.at(color) }; !std::any_of(detected.begin(), detected.end(), [&det](auto&& hc) -> bool { return det == hc; })) {
-											detected.emplace_back(det);
-											std::clog << "  + " << det << '\n';
-										}
-									}
-								}
-							}
-
-							detected.shrink_to_fit();
-							return detected;
-						} };
-
 						size_t i = 0;
+
+						const auto t_start{ CLK::now() };
+
 						for (length y{ 0 }; y < rows; ++y) {
 							for (length x{ 0 }; x < cols; ++x, ++i) {
 								const auto& rect{ Rectangle(x * partSize.width, y * partSize.height, partSize.width, partSize.height) };
 								auto part{ img.image(rect) };
 								const auto& cellPos{ offsetCellCoordinates(Point{ x, y }) };
-								std::clog << "Processing Partition #" << i << '\n'
-									<< "  Partition Index:   ( " << x << ", " << y << " )\n"
-									<< "  Cell Coordinates:  ( " << cellPos.x << ", " << cellPos.y << ")\n";
+								std::clog << "Processing Partition #" << color::setcolor::green << i << color::setcolor::reset << '\n'
+									<< "  Partition Index:   ( " << color::setcolor::yellow << x << color::setcolor::reset << ", " << color::setcolor::yellow << y << color::setcolor::reset << " )\n"
+									<< "  Cell Coordinates:  ( " << color::setcolor::yellow << cellPos.x << color::setcolor::reset << ", " << color::setcolor::yellow << cellPos.y << color::setcolor::reset << " )\n";
 								if (display_each) {
 									cv::imshow(windowName, part); // display the image in the window
 									cv::waitKey(windowTimeout);
 								}
-								if (auto results{ identify_colors(std::move(part)) }; !results.empty()) {
-									vec.emplace_back(std::make_pair(cellPos, std::move(results)));
+								if (PartitionStats stats(std::move(part), colormap); stats.valid() && !stats.empty()) {
+									if (auto regions{ stats.getRegions(pxThreshold) }; !regions.empty()) {
+										std::clog << "  " << color::setcolor::cyan << regions << color::setcolor::reset << '\n';
+										vec.emplace_back(std::make_pair(cellPos, std::move(regions)));
+									}
+									else std::clog << "  " << color::setcolor::red << "No regions above threshold." << color::setcolor::reset;
+
 								}
 							}
 						}
 
-						std::clog << "Finished processing image partitions." << std::endl;
-						std::clog << "Found " << vec.size() << " partitions with valid color map data." << std::endl;
+						const auto& t_end{ CLK::now() };
+
+						if (i == 0) throw make_exception("Failed to partition the image!");
+
+						std::clog << "Finished processing image partitions after " << color::setcolor::green
+							<< std::chrono::duration_cast<std::chrono::seconds>(std::chrono::duration<double, std::nano>(t_end - t_start))
+							<< color::setcolor::reset << std::endl;
+						std::clog << color::setcolor::green << vec.size() << color::setcolor::reset << " / " << color::setcolor::green << i << color::setcolor::reset << " partitions had valid color map data." << std::endl;
 
 						vec.shrink_to_fit();
 
@@ -347,8 +205,7 @@ int main(const int argc, char** argv)
 						outpath.replace_extension(".ini");
 						if (const auto& outArg{ args.typegetv_any<opt::Flag, opt::Option>('o', "out") }; outArg.has_value())
 							outpath = outArg.value(); // override the output path
-
-						if (file::write(outpath, vec)) {
+						if (file::write(outpath, "\n[HoldMap]\n", vec)) {
 							std::clog << "Successfully saved the lookup matrix to " << outpath << std::endl;
 						}
 						else throw make_exception("Failed to write to output file ", outpath, "!");

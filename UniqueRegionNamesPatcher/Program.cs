@@ -1,36 +1,52 @@
 using Mutagen.Bethesda;
-using Mutagen.Bethesda.Plugins;
 using Mutagen.Bethesda.Plugins.Order;
 using Mutagen.Bethesda.Skyrim;
 using Mutagen.Bethesda.Synthesis;
 using Noggog;
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
+using System.Text.RegularExpressions;
 using System.Threading.Tasks;
-using UniqueRegionNamesPatcher.UniqueRegionNames;
 using UniqueRegionNamesPatcher.util;
-using UniqueRegionNamesPatcher.util.Enum;
 
 namespace UniqueRegionNamesPatcher
 {
+    public class INI
+    {
+        public INI() {}
+
+        private Dictionary<string, Dictionary<string, string>> filemap;
+
+        public void read(string filepath)
+        {
+            if (File.Exists(filepath))
+            {
+                using (var sr = new StreamReader(File.OpenRead(filepath)))
+                {
+                    string buf;
+
+                    while (!sr.EndOfStream)
+                    {
+                        buf = sr.ReadLine();
+
+                        string line = "";
+
+                        int iComment = line.IndexOfAny(new[] { ';', '#' });
+                        if (iComment != -1) // remove all characters that appear after comment characters
+                            buf = buf[..iComment];
+
+                        
+                    }
+                }
+            }
+        }
+    }
     public class Program
     {
         private static Lazy<Settings> _lazySettings = null!;
         private static Settings Settings => _lazySettings.Value;
-
-        private static Dictionary<HoldCapital, FormLink<IRegionGetter>> HoldCapitalLookup = new()
-        {
-            { HoldCapital.Solitude, UniqueRegionNames.UniqueRegionNames.Region.xxxMapHaafingar },
-            { HoldCapital.Morthal, UniqueRegionNames.UniqueRegionNames.Region.xxxMapHaafingar },
-            { HoldCapital.Markarth, UniqueRegionNames.UniqueRegionNames.Region.xxxMapHaafingar },
-            { HoldCapital.Whiterun, UniqueRegionNames.UniqueRegionNames.Region.xxxMapHaafingar },
-            { HoldCapital.Falkreath, UniqueRegionNames.UniqueRegionNames.Region.xxxMapHaafingar },
-            { HoldCapital.Dawnstar, UniqueRegionNames.UniqueRegionNames.Region.xxxMapHaafingar },
-            { HoldCapital.Winterhold, UniqueRegionNames.UniqueRegionNames.Region.xxxMapHaafingar },
-            { HoldCapital.Windhelm, UniqueRegionNames.UniqueRegionNames.Region.xxxMapHaafingar },
-            { HoldCapital.Riften, UniqueRegionNames.UniqueRegionNames.Region.xxxMapRift },
-        };
 
         public static async Task<int> Main(string[] args)
         {
@@ -47,38 +63,48 @@ namespace UniqueRegionNamesPatcher
 
             long changeCount = 0;
 
-            IModListing<ISkyrimModGetter>? uniqueRegionNames = null;
+            //IModListing<ISkyrimModGetter>? uniqueRegionNames = null;
 
-            foreach (var mod in state.LoadOrder.PriorityOrder)
-            {
-                if (!mod.Enabled || mod.Ghosted)
-                    continue;
-                if (mod.ModKey == UniqueRegionNames.UniqueRegionNames.ModKey)
-                {
-                    uniqueRegionNames = mod;
-                }
-            }
+            //foreach (var mod in state.LoadOrder.PriorityOrder)
+            //{
+            //    if (!mod.Enabled || mod.Ghosted)
+            //        continue;
+            //    if (mod.ModKey == UniqueRegionNames.UniqueRegionNames.ModKey)
+            //    {
+            //        uniqueRegionNames = mod;
+            //    }
+            //}
 
-            Matrix lookup = new();
-
-            if (uniqueRegionNames == null)
-                throw new Exception($"Missing \'{UniqueRegionNames.UniqueRegionNames.ModKey.Name}\'!");
-            else if (uniqueRegionNames.Mod == null)
-                throw new Exception($"Found \'{UniqueRegionNames.UniqueRegionNames.ModKey.Name}\', but it was null!");
-            else Console.WriteLine($"Found \'{UniqueRegionNames.UniqueRegionNames.ModKey.Name}\'");
+            //if (uniqueRegionNames == null)
+            //    throw new Exception($"Missing \'{UniqueRegionNames.UniqueRegionNames.ModKey.Name}\'!");
+            //else if (uniqueRegionNames.Mod == null)
+            //    throw new Exception($"Found \'{UniqueRegionNames.UniqueRegionNames.ModKey.Name}\', but it was null!");
+            //else Console.WriteLine($"Found \'{UniqueRegionNames.UniqueRegionNames.ModKey.Name}\'");
 
             var urnTamriel = uniqueRegionNames.Mod.Worldspaces.First(wrld => wrld.EditorID == "Tamriel").DeepCopy();
             var stateTamriel = state.LoadOrder.PriorityOrder.Worldspace().WinningOverrides().First(wrld => wrld.EditorID == "Tamriel").DeepCopy();
 
             var intersectBlocks = urnTamriel.SubCells.Intersect(stateTamriel.SubCells);
 
-            foreach (var block in intersectBlocks)
+            foreach (var WRLD in state.LoadOrder.PriorityOrder.Worldspace().WinningOverrides())
             {
-                foreach (var subBlock in block.Items)
+                var WRLDcopy = WRLD.DeepCopy();
+                long changeCopy = changeCount;
+
+                foreach (var block in WRLD.SubCells)
                 {
-                    lookup.Get(subBlock.BlockNumberX, subBlock.BlockNumberY);
+                    foreach (var subBlock in block.Items)
+                    {
+                        // convert subblock coordinates to cell coordinates
+                        CellCoordinate coord = CellCoordinate.FromSubBlock(subBlock.BlockNumberX, subBlock.BlockNumberY);
+
+                    }
                 }
+
+                if (changeCopy > changeCount)
+                    state.PatchMod.Worldspaces.Set(WRLDcopy);
             }
+
 
             Console.WriteLine("=== Diagnostics ===");
 
