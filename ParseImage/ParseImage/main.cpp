@@ -92,7 +92,7 @@ int main(const int argc, char** argv)
 				<< "  -o  --out <PATH>      Specify a filepath to export the results to. Defaults to the name of the image\n"
 				<< "                         file with the extension '.ini', in the current working directory.\n"
 				<< "  -d  --dim <X:Y>       Specify the image partition dimensions that the input image is divided into.\n"
-				<< "      --display         Opens a window to display the loaded image file.\n"
+				<< "      --display         Displays each partition in a window while parsing.\n"
 				<< "  -T  --timeout <ms>    When '--display' is specified, closes the display window after '<ms>' milliseconds.\n"
 				<< "                         a value of 0 will wait forever, which is the default behaviour.\n"
 				<< "  -t  --threshold <%>   A percentage in the range (0 - 100) that determines the minimum number of matching\n"
@@ -185,7 +185,6 @@ int main(const int argc, char** argv)
 										vec.emplace_back(std::make_pair(cellPos, std::move(regions)));
 									}
 									else std::clog << "  " << color::setcolor::red << "No regions above threshold." << color::setcolor::reset;
-
 								}
 							}
 						}
