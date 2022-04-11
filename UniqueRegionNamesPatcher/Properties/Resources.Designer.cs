@@ -61,32 +61,12 @@ namespace UniqueRegionNamesPatcher.Properties {
         }
         
         /// <summary>
-        ///   Looks up a localized string similar to [HoldMap]
-        ///(-19,34) = [&quot;Solitude&quot;]
-        ///(-18,34) = [&quot;Solitude&quot;]
-        ///(-17,34) = [&quot;Solitude&quot;]
-        ///(-16,34) = [&quot;Solitude&quot;]
-        ///(-15,34) = [&quot;Solitude&quot;]
-        ///(-14,34) = [&quot;Solitude&quot;]
-        ///(-13,34) = [&quot;Solitude&quot;]
-        ///(-19,33) = [&quot;Solitude&quot;]
-        ///(-18,33) = [&quot;Solitude&quot;]
-        ///(-17,33) = [&quot;Solitude&quot;]
-        ///(-16,33) = [&quot;Solitude&quot;]
-        ///(-15,33) = [&quot;Solitude&quot;]
-        ///(-14,33) = [&quot;Solitude&quot;]
-        ///(-13,33) = [&quot;Solitude&quot;]
-        ///(-22,32) = [&quot;Solitude&quot;]
-        ///(-21,32) = [&quot;Solitude&quot;]
-        ///(-20,32) = [&quot;Solitude&quot;]
-        ///(-19,32) = [&quot;Solitude&quot;]
-        ///(-18,32) = [&quot;Solitude&quot;]
-        ///(-17,32) = [&quot;Solitude&quot;]
-        ///( [rest of string was truncated]&quot;;.
+        ///   Looks up a localized resource of type System.Byte[].
         /// </summary>
-        internal static string cellmap {
+        internal static byte[] cellmap {
             get {
-                return ResourceManager.GetString("cellmap", resourceCulture);
+                object obj = ResourceManager.GetObject("cellmap", resourceCulture);
+                return ((byte[])(obj));
             }
         }
     }
