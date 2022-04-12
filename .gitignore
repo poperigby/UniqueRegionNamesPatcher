@@ -347,9 +347,5 @@ healthchecksdb
 
 # Backup folder for Package Reference Convert tool in Visual Studio 2017
 MigrationBackup/
-/cellmap.pdn
 */out/*
-/ParseImage/ParseImage/images/cellmap.pdn
-/ParseImage/ParseImage/images/cellmap.png
-/ParseImage/ParseImage/images/cellmapfull.png
 /UniqueRegionNamesPatcher/resources/cellmap
