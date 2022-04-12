@@ -124,7 +124,7 @@ namespace UniqueRegionNamesPatcher
                     var regionNames = value.ParseArray();
 
                     Map.Add(coord.Value, regionNames);
-                    Console.WriteLine($"Added ({coord.Value.X}, {coord.Value.Y}) = {value}");
+                    //Console.WriteLine($"Added ({coord.Value.X}, {coord.Value.Y}) = {value}");
                 }
             }
         }
@@ -138,12 +138,13 @@ namespace UniqueRegionNamesPatcher
                 {
                     if (objArray[i] is string editorID)
                     {
-                        var added = state.PatchMod.Regions.AddNew(editorID);
-                        if (added != null)
+                        var existing = state.PatchMod.Regions.FirstOrDefault(r => r.EditorID == editorID);
+                        if (existing == null)
                         {
-                            list.Add(new FormLink<IRegionGetter>(added.FormKey));
-                            Console.WriteLine($"Linked region {added.EditorID}.");
+                            list.Add(new FormLink<IRegionGetter>(state.PatchMod.Regions.AddNew(editorID).FormKey));
+                            //    Console.WriteLine($"Linked region {added.EditorID}.");
                         }
+                        else list.Add(existing.FormKey);
                     }
                 }
                 Map[coord] = list.ToArray();
@@ -196,23 +197,26 @@ namespace UniqueRegionNamesPatcher
             state.PatchMod.Regions.AddNew("");
 
             RegionMap coordMap = new(Properties.Resources.cellmap);
-            coordMap.CreateRegions(ref state);
+            //coordMap.CreateRegions(ref state);
 
             long changeCount = 0;
 
-            foreach (var WRLD in state.LoadOrder.PriorityOrder.Worldspace().WinningOverrides())
+            foreach (var WRLD in state.LoadOrder.PriorityOrder.Worldspace().WinningOverrides(true))
             {
+                if (WRLD == null || WRLD.EditorID == null || !WRLD.EditorID.Equals("Tamriel", StringComparison.OrdinalIgnoreCase))
+                    continue;
+
                 var WRLDcopy = WRLD.DeepCopy();
                 long changeCopy = changeCount;
 
                 int blockIndex = 0;
-                foreach (var block in WRLD.SubCells)
+                foreach (var block in WRLD.SubCells) // iterate over each block
                 {
                     var blockCopy = block.DeepCopy();
                     int blockChanges = 0;
 
                     int subBlockIndex = 0;
-                    foreach (var subBlock in block.Items)
+                    foreach (var subBlock in block.Items) // iterate over each subBlock
                     {
                         var subBlockCopy = subBlock.DeepCopy();
                         int subBlockChanges = 0;
