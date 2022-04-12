@@ -1,3 +1,7 @@
 # Unique Region Names Patcher Dev Branch
 
-This is the development branch, which includes the image parser **(C++20, uses CMake 3.20 or newer)** used to generate the cell region map that is redistributed with the actual patcher.
+___If you're a user, DON'T use this branch, it includes Git LFS files and may cause issues when loaded by Synthesis!___
+
+## What's the difference?
+
+This branch contains a whole lot of extra code, including the source code of the image parser program I made in order to generate the cell region map.
