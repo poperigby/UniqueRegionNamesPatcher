@@ -73,6 +73,31 @@ namespace UniqueRegionNamesPatcher
         }
     }
 
+    internal class RegionWrapper
+    {
+        public RegionWrapper(string editorID, FormLink<IRegionGetter> link)
+        {
+            EditorID = editorID;
+            FormLink = link;
+        }
+        public string EditorID { get; }
+        public FormLink<IRegionGetter> FormLink { get; }
+    }
+
+    internal class RegionMapDataHeader : RegionDataHeader
+    {
+        public new RegionData.RegionDataType DataType
+        {
+            get => base.DataType;
+            set => base.DataType = value;
+        }
+        public new RegionData.RegionDataFlag Flags
+        {
+            get => base.Flags;
+            set => base.Flags = value;
+        }
+    }
+
     internal class RegionMap
     {
         public RegionMap(byte[] fileContent, ref IPatcherState<ISkyrimMod, ISkyrimModGetter> state)
@@ -135,51 +160,40 @@ namespace UniqueRegionNamesPatcher
 
                     List<FormLink<IRegionGetter>> links = new();
 
-                    foreach (string name in regionNames)
+                    foreach (string editorID in regionNames)
                     {
-                        var existing = Regions.FirstOrDefault(r => name.Equals(r.EditorID, StringComparison.Ordinal));
+                        // check for an already existing region (added by this patcher only) with the given editor ID (name)
+                        RegionWrapper? existing = this.Regions.FirstOrDefault(r => r != null && editorID.Equals(r.EditorID, StringComparison.Ordinal), null);
+
                         if (existing == null)
                         {
-                            var formKey = new FormKey(state.PatchMod.ModKey, state.PatchMod.NextFormID);
-
-                            var regionMap = new Mutagen.Bethesda.Skyrim.RegionMap()
+                            var region = new Region(state.PatchMod.GetNextFormKey(), state.GameRelease.ToSkyrimRelease())
                             {
-                                Header = new RegionDataHeader()
+                                EditorID = editorID,
+                                Map = new()
                                 {
-                                    //DataType = RegionData.RegionDataType.Map,
-                                    Flags = RegionData.RegionDataFlag.Override,
-                                    Priority = priority
-                                },
-                                Name = name.ParseRegionMapName(),
-                            };
-
-                            var regionAreas = new ExtendedList<RegionArea>()
-                            {
-                                new()
-                                {
-                                    EdgeFallOff = 1024,
-                                    RegionPointListData = new()
+                                    Name = editorID.ParseRegionMapName(),
+                                    Header = new RegionMapDataHeader()
                                     {
-
-                                    }
+                                        DataType = RegionData.RegionDataType.Map,
+                                        Priority = priority,
+                                        Flags = RegionData.RegionDataFlag.Override
+                                    },
                                 },
+
                             };
 
-                            var region = new Region(formKey, state.GameRelease.ToSkyrimRelease())
-                            {
-                                EditorID = name,
-                                Map = regionMap,
-                                RegionAreas = regionAreas,
-                            };
                             region.Worldspace.SetTo(Skyrim.Worldspace.Tamriel.FormKey);
 
-                            Regions.Add(region);
+                            state.PatchMod.Regions.Add(region);
+
+                            this.Regions.Add(new(editorID, region.FormKey));
                             links.Add(region.FormKey);
                             Console.WriteLine($"Created new region '{region.EditorID}' with name '{region.Map.Name}'");
                         }
                         else
                         {
-                            links.Add(existing.FormKey);
+                            links.Add(existing.FormLink);
                         }
                     }
 
@@ -210,7 +224,7 @@ namespace UniqueRegionNamesPatcher
             return links;
         }
 
-        public List<Region> Regions { get; private set; }
+        public List<RegionWrapper> Regions { get; private set; }
         public Dictionary<Point, List<FormLink<IRegionGetter>>> Map { get; private set; }
     }
 
@@ -231,8 +245,6 @@ namespace UniqueRegionNamesPatcher
         public static void RunPatch(IPatcherState<ISkyrimMod, ISkyrimModGetter> state)
         {
             Console.WriteLine("=== Patcher Begin ===");
-
-            state.PatchMod.Regions.AddNew("");
 
             RegionMap coordMap = new(Properties.Resources.cellmap, ref state);
 
@@ -296,7 +308,7 @@ namespace UniqueRegionNamesPatcher
                             {
                                 if (subblockCopy == null)
                                     subblockCopy = subblock.DeepCopy();
-                                subblockCopy!.Items[cellIndex] = cellCopy!;
+                                subblockCopy!.Items[cellIndex] = cellCopy! as Cell;
                                 ++subblockChanges;
                             }
                             ++cellIndex;
