@@ -1,8 +1,8 @@
 using Mutagen.Bethesda;
 using Mutagen.Bethesda.Plugins;
-using Mutagen.Bethesda.Plugins.Cache;
 using Mutagen.Bethesda.Skyrim;
 using Mutagen.Bethesda.Synthesis;
+using Mutagen.Bethesda.FormKeys.SkyrimSE;
 using Noggog;
 using System;
 using System.Collections.Generic;
@@ -131,6 +131,7 @@ namespace UniqueRegionNamesPatcher
                     // parse the value (region name list)
                     string value = line[(eq + 1)..].Trim();
                     var regionNames = value.ParseArray();
+                    byte priority = 60; //< TODO:  Use dynamic priority, as in the original mod
 
                     List<FormLink<IRegionGetter>> links = new();
 
@@ -139,18 +140,46 @@ namespace UniqueRegionNamesPatcher
                         var existing = Regions.FirstOrDefault(r => name.Equals(r.EditorID, StringComparison.Ordinal));
                         if (existing == null)
                         {
-                            Region newRegion = state.PatchMod.Regions.AddNew(name);
-                            newRegion.Map = new()
+                            var formKey = new FormKey(state.PatchMod.ModKey, state.PatchMod.NextFormID);
+
+                            var regionMap = new Mutagen.Bethesda.Skyrim.RegionMap()
                             {
-                                Name = name.ParseRegionMapName()
+                                Header = new RegionDataHeader()
+                                {
+                                    //DataType = RegionData.RegionDataType.Map,
+                                    Flags = RegionData.RegionDataFlag.Override,
+                                    Priority = priority
+                                },
+                                Name = name.ParseRegionMapName(),
                             };
-                            Regions.Add(newRegion);
-                            links.Add(new FormLink<IRegionGetter>(newRegion));
-                            Console.WriteLine($"Created new region '{newRegion.EditorID}' with name '{newRegion.Map.Name}'");
+
+                            var regionAreas = new ExtendedList<RegionArea>()
+                            {
+                                new()
+                                {
+                                    EdgeFallOff = 1024,
+                                    RegionPointListData = new()
+                                    {
+
+                                    }
+                                },
+                            };
+
+                            var region = new Region(formKey, state.GameRelease.ToSkyrimRelease())
+                            {
+                                EditorID = name,
+                                Map = regionMap,
+                                RegionAreas = regionAreas,
+                            };
+                            region.Worldspace.SetTo(Skyrim.Worldspace.Tamriel.FormKey);
+
+                            Regions.Add(region);
+                            links.Add(region.FormKey);
+                            Console.WriteLine($"Created new region '{region.EditorID}' with name '{region.Map.Name}'");
                         }
                         else
                         {
-                            links.Add(new FormLink<IRegionGetter>(existing));
+                            links.Add(existing.FormKey);
                         }
                     }
 
@@ -207,7 +236,7 @@ namespace UniqueRegionNamesPatcher
 
             RegionMap coordMap = new(Properties.Resources.cellmap, ref state);
 
-            long changeCount = 0;
+            long changeCount = 0, totalCellChangeCount = 0;
 
             List<FormKey> processed = new();
 
@@ -238,7 +267,7 @@ namespace UniqueRegionNamesPatcher
                             if (processed.Any(f => f.Equals(cell.FormKey)))
                                 continue;
 
-                            var cellCopy = cell.DeepCopy();
+                            Cell? cellCopy = null;
 
                             bool cellChanged = false;
                             if (cell.Grid != null)
@@ -247,24 +276,27 @@ namespace UniqueRegionNamesPatcher
 
                                 var regions = coordMap.GetFormLinksForPos(coord);
 
+                                string prefix = $"[{coord.X}, {coord.Y}]";
+                                Console.WriteLine($"{prefix}{new string(' ', 14 - prefix.Length)} Found {regions.Count} region{(regions.Count != 0 && regions.Count > 1 ? "s" : "")}.");
+
                                 if (regions.Count > 0)
                                 {
-                                    Console.WriteLine($"Found {regions.Count} regions for cell location ({coord.X}, {coord.Y})");
-
+                                    if (cellCopy == null)
+                                        cellCopy = cell.DeepCopy();
                                     if (cellCopy.Regions == null)
                                         cellCopy.Regions = new();
 
                                     cellCopy.Regions.AddRange(regions);
                                     cellChanged = true;
+                                    ++totalCellChangeCount;
                                     processed.Add(cell.FormKey);
                                 }
-                                else Console.WriteLine($"No regions found for cell location ({coord.X}, {coord.Y})");
                             }
                             if (cellChanged)
                             {
                                 if (subblockCopy == null)
                                     subblockCopy = subblock.DeepCopy();
-                                subblockCopy!.Items[cellIndex] = cellCopy;
+                                subblockCopy!.Items[cellIndex] = cellCopy!;
                                 ++subblockChanges;
                             }
                             ++cellIndex;
@@ -300,7 +332,7 @@ namespace UniqueRegionNamesPatcher
             Console.WriteLine("=== Diagnostics ===");
 
             if (changeCount > 0)
-                Console.WriteLine($"Patched {changeCount} records.");
+                Console.WriteLine($"Patched {totalCellChangeCount} cells in {changeCount} worldspace{(changeCount != 0 && changeCount > 1 ? "s" : "")}");
             else Console.WriteLine("No changes were made, something probably went wrong!");
 
             Console.WriteLine("=== Patcher Complete ===");
