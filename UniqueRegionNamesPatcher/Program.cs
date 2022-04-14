@@ -2,7 +2,6 @@ using Mutagen.Bethesda;
 using Mutagen.Bethesda.Plugins;
 using Mutagen.Bethesda.Skyrim;
 using Mutagen.Bethesda.Synthesis;
-using Mutagen.Bethesda.FormKeys.SkyrimSE;
 using Noggog;
 using System;
 using System.Collections.Generic;
@@ -10,224 +9,10 @@ using System.Drawing;
 using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
+using UniqueRegionNamesPatcher.Utility;
 
 namespace UniqueRegionNamesPatcher
 {
-    internal static class FileParserHelpers
-    {
-        internal static string RemoveAll(this string s, params char[] ch)
-        {
-            string rs = string.Empty;
-            for (int i = 0; i < s.Length; ++i)
-            {
-                char c = s[i];
-                if (!ch.Contains(c))
-                    rs += c;
-            }
-            return rs;
-        }
-        internal static string RemoveIf(this string s, Func<char, bool> pred)
-        {
-            string rs = string.Empty;
-            for (int i = 0; i < s.Length; ++i)
-            {
-                char c = s[i];
-                if (!pred(c))
-                    rs += c;
-            }
-            return rs;
-        }
-        internal static string TrimComments(this string s, char[] comment_chars)
-        {
-            int i = s.IndexOfAny(comment_chars);
-            if (i != -1)
-                return s[..i];
-            return s;
-        }
-        internal static string TrimComments(this string s) => TrimComments(s, new[] { ';', '#' });
-        internal static string[] ParseArray(this string s)
-        {
-            List<string> elements = new();
-            foreach (string elem in s.Trim('[', ']').Split(',', StringSplitOptions.RemoveEmptyEntries))
-            {
-                string e = elem.Trim('"');
-                if (e.Length > 0)
-                    elements.Add(e);
-            }
-            return elements.ToArray();
-        }
-        internal static Point? ParsePoint(this string s)
-        {
-            var split = s.Trim('(', ')').Split(',');
-            if (split.Length == 2)
-            {
-                return new(Convert.ToInt32(split[0]), Convert.ToInt32(split[1]));
-            }
-            return null;
-        }
-        internal static string ParseRegionMapName(this string s)
-        {
-            if (!s.StartsWith("xxxMap"))
-                return s;
-            return System.Text.RegularExpressions.Regex.Replace(s[6..], "([A-Z])", " $1", System.Text.RegularExpressions.RegexOptions.Compiled).Trim();
-        }
-    }
-
-    internal class RegionWrapper
-    {
-        public RegionWrapper(string editorID, FormLink<IRegionGetter> link)
-        {
-            EditorID = editorID;
-            FormLink = link;
-        }
-        public string EditorID { get; }
-        public FormLink<IRegionGetter> FormLink { get; }
-    }
-
-    internal class RegionMapDataHeader : RegionDataHeader
-    {
-        public new RegionData.RegionDataType DataType
-        {
-            get => base.DataType;
-            set => base.DataType = value;
-        }
-        public new RegionData.RegionDataFlag Flags
-        {
-            get => base.Flags;
-            set => base.Flags = value;
-        }
-    }
-
-    internal class RegionMap
-    {
-        public RegionMap(byte[] fileContent, ref IPatcherState<ISkyrimMod, ISkyrimModGetter> state)
-        {
-            Map = new();
-            Regions = new();
-            Parse(new MemoryStream(fileContent), ref state);
-        }
-        public RegionMap(string path, ref IPatcherState<ISkyrimMod, ISkyrimModGetter> state)
-        {
-            Map = new();
-            Regions = new();
-            Parse(File.Open(path, FileMode.Open, FileAccess.Read, FileShare.Read), ref state);
-        }
-
-        private void Parse(Stream stream, ref IPatcherState<ISkyrimMod, ISkyrimModGetter> state)
-        {
-            using StreamReader sr = new(stream);
-
-            string header = string.Empty;
-            bool doRead = false;
-
-            int ln = 0;
-            for (string? line = sr.ReadLine(); !sr.EndOfStream; line = sr.ReadLine(), ++ln)
-            {
-                if (line == null)
-                    continue;
-
-                // strip all comments & whitespace
-                line = line.TrimComments().RemoveIf(char.IsWhiteSpace);
-
-                if (line.Length == 0)
-                    continue;
-
-                // check for an INI header:
-                int eq = line.IndexOf('='), open = line.IndexOf('['), close = line.IndexOf(']');
-
-                if (eq == -1 && open != -1 && close != -1)
-                {
-                    header = line[(open + 1)..close];
-                    doRead = header.Equals("HoldMap", StringComparison.Ordinal);
-                }
-                else if (doRead)
-                {
-                    if (eq == -1)
-                        continue;
-
-                    // parse the key (coordinate)
-                    var coord = line[..eq].RemoveAll('(', ')', ' ').ParsePoint();
-                    if (coord == null)
-                    {
-                        Console.WriteLine($"[WARNING]\tLine {ln} contains an invalid coordinate string! ('{line}')");
-                        continue;
-                    }
-
-                    // parse the value (region name list)
-                    string value = line[(eq + 1)..].Trim();
-                    var regionNames = value.ParseArray();
-                    byte priority = 60; //< TODO:  Use dynamic priority, as in the original mod
-
-                    List<FormLink<IRegionGetter>> links = new();
-
-                    foreach (string editorID in regionNames)
-                    {
-                        // check for an already existing region (added by this patcher only) with the given editor ID (name)
-                        RegionWrapper? existing = this.Regions.FirstOrDefault(r => r != null && editorID.Equals(r.EditorID, StringComparison.Ordinal), null);
-
-                        if (existing == null)
-                        {
-                            var region = new Region(state.PatchMod.GetNextFormKey(), state.GameRelease.ToSkyrimRelease())
-                            {
-                                EditorID = editorID,
-                                Map = new()
-                                {
-                                    Name = editorID.ParseRegionMapName(),
-                                    Header = new RegionMapDataHeader()
-                                    {
-                                        DataType = RegionData.RegionDataType.Map,
-                                        Priority = priority,
-                                        Flags = RegionData.RegionDataFlag.Override
-                                    },
-                                },
-
-                            };
-
-                            region.Worldspace.SetTo(Skyrim.Worldspace.Tamriel.FormKey);
-
-                            state.PatchMod.Regions.Add(region);
-
-                            this.Regions.Add(new(editorID, region.FormKey));
-                            links.Add(region.FormKey);
-                            Console.WriteLine($"Created new region '{region.EditorID}' with name '{region.Map.Name}'");
-                        }
-                        else
-                        {
-                            links.Add(existing.FormLink);
-                        }
-                    }
-
-                    ///var regions = Regions.Where(r => regionNames.Any(n => n.Equals(r.EditorID, StringComparison.Ordinal))).Cast<IRegionGetter>().ToList();
-
-                    Map.Add(coord.Value, links);
-                    //Console.WriteLine($"Added ({coord.Value.X}, {coord.Value.Y}) = {value}");
-                }
-            }
-        }
-
-        public List<FormLink<IRegionGetter>> GetFormLinksForPos(Point coord)
-        {
-            List<FormLink<IRegionGetter>> links = new();
-
-            if (Map.ContainsKey(coord))
-            {
-                var arr = Map[coord];
-                if (arr != null)
-                {
-                    foreach (var link in arr)
-                    {
-                        links.Add(link);
-                    }
-                }
-            }
-
-            return links;
-        }
-
-        public List<RegionWrapper> Regions { get; private set; }
-        public Dictionary<Point, List<FormLink<IRegionGetter>>> Map { get; private set; }
-    }
-
     public class Program
     {
         private static Lazy<Settings> _lazySettings = null!;
@@ -244,110 +29,139 @@ namespace UniqueRegionNamesPatcher
 
         public static void RunPatch(IPatcherState<ISkyrimMod, ISkyrimModGetter> state)
         {
-            Console.WriteLine("=== Patcher Begin ===");
-
-            RegionMap coordMap = new(Properties.Resources.cellmap, ref state);
+            Console.WriteLine("===================");
 
             long changeCount = 0, totalCellChangeCount = 0;
 
-            List<FormKey> processed = new();
-
-            foreach (var world in state.LoadOrder.ListedOrder.Worldspace().WinningOverrides())
+            foreach (var WorldspaceSettings in Settings.Worldspaces)
             {
-                if (world.EditorID == null || !world.EditorID.Equals("Tamriel", StringComparison.Ordinal))
-                    continue;
+                Console.WriteLine($"[Processing Worldspace {WorldspaceSettings.Worldspace.Resolve(state.LinkCache).EditorID}]");
 
-                int worldChanges = 0;
+                Utility.RegionMap coordMap = WorldspaceSettings.GetRegionMap(ref state);
 
-                Worldspace? worldCopy = null;
-
-                int blockIndex = 0;
-                foreach (var block in world.SubCells)
+                if (Settings.verbose)
                 {
-                    int blockChanges = 0;
-                    WorldspaceBlock? blockCopy = null;
+                    Console.WriteLine("Finished parsing region mapping data.");
+                    Console.WriteLine($"Parsed {coordMap.Regions.Count} region{(coordMap.Regions.Count != 1 ? "s" : "")} containing {coordMap.Map.Count} cell{(coordMap.Map.Count != 1 ? "s" : "")}:");
+                    Console.WriteLine('{');
 
-                    int subblockIndex = 0;
-                    foreach (var subblock in block.Items)
+                    int longestEdID = 0, longestName = 0;
+                    coordMap.Regions.ForEach(delegate (RegionWrapper rw)
                     {
-                        int subblockChanges = 0;
-                        WorldspaceSubBlock? subblockCopy = null;
+                        if (rw.EditorID.Length > longestEdID)
+                            longestEdID = rw.EditorID.Length;
+                        if (rw.Name != null && rw.Name.Length > longestName)
+                            longestName = rw.Name.Length;
+                    });
 
-                        int cellIndex = 0;
-                        foreach (var cell in subblock.Items)
-                        {
-                            if (processed.Any(f => f.Equals(cell.FormKey)))
-                                continue;
-
-                            Cell? cellCopy = null;
-
-                            bool cellChanged = false;
-                            if (cell.Grid != null)
-                            {
-                                Point coord = new(cell.Grid.Point.X, cell.Grid.Point.Y);
-
-                                var regions = coordMap.GetFormLinksForPos(coord);
-
-                                string prefix = $"[{coord.X}, {coord.Y}]";
-                                Console.WriteLine($"{prefix}{new string(' ', 14 - prefix.Length)} Found {regions.Count} region{(regions.Count != 0 && regions.Count > 1 ? "s" : "")}.");
-
-                                if (regions.Count > 0)
-                                {
-                                    if (cellCopy == null)
-                                        cellCopy = cell.DeepCopy();
-                                    if (cellCopy.Regions == null)
-                                        cellCopy.Regions = new();
-
-                                    cellCopy.Regions.AddRange(regions);
-                                    cellChanged = true;
-                                    ++totalCellChangeCount;
-                                    processed.Add(cell.FormKey);
-                                }
-                            }
-                            if (cellChanged)
-                            {
-                                if (subblockCopy == null)
-                                    subblockCopy = subblock.DeepCopy();
-                                subblockCopy!.Items[cellIndex] = cellCopy! as Cell;
-                                ++subblockChanges;
-                            }
-                            ++cellIndex;
-                        }
-                        if (subblockChanges > 0)
-                        {
-                            if (blockCopy == null)
-                                blockCopy = block.DeepCopy();
-                            blockCopy!.Items[subblockIndex] = subblockCopy!;
-                            ++blockChanges;
-                        }
-                        ++subblockIndex;
-                    } //< SUBBLOCK
-
-                    if (blockChanges > 0)
+                    // print results to the console
+                    foreach (var region in coordMap.Regions)
                     {
-                        if (worldCopy == null)
-                            worldCopy = world.DeepCopy();
-                        worldCopy.SubCells[blockIndex] = blockCopy!;
-                        ++worldChanges;
+                        Console.WriteLine($"    {{ EditorID: '{region.EditorID}':{new string(' ', longestEdID + 4 - region.EditorID.Length)}Displayname: '{region.Name}'{new string(' ', longestName - region.Name?.Length ?? 0)} }},");
                     }
-                    ++blockIndex;
-                } //< BLOCK
 
-                if (worldChanges > 0)
-                {
-                    state.PatchMod.Worldspaces.Set(worldCopy!);
-                    ++changeCount;
+                    Console.WriteLine('}');
                 }
-            } //< WORLDSPACE
 
+                List<FormKey> processed = new();
+
+                foreach (var world in state.LoadOrder.ListedOrder.Worldspace().WinningOverrides())
+                {
+                    if (!world.FormKey.Equals(WorldspaceSettings.Worldspace.FormKey))
+                        continue;
+
+                    int worldChanges = 0;
+
+                    Worldspace? worldCopy = null;
+
+                    int blockIndex = 0;
+                    foreach (var block in world.SubCells)
+                    {
+                        int blockChanges = 0;
+                        WorldspaceBlock? blockCopy = null;
+
+                        int subblockIndex = 0;
+                        foreach (var subblock in block.Items)
+                        {
+                            int subblockChanges = 0;
+                            WorldspaceSubBlock? subblockCopy = null;
+
+                            int cellIndex = 0;
+                            foreach (var cell in subblock.Items)
+                            {
+                                if (processed.Any(f => f.Equals(cell.FormKey)))
+                                    continue;
+
+                                Cell? cellCopy = null;
+
+                                bool cellChanged = false;
+                                if (cell.Grid != null)
+                                {
+                                    Point coord = new(cell.Grid.Point.X, cell.Grid.Point.Y);
+
+                                    var regions = coordMap.GetFormLinksForPos(coord);
+
+                                    string prefix = $"[{coord.X}, {coord.Y}]";
+                                    Console.WriteLine($"{prefix}{new string(' ', 14 - prefix.Length)} Found {regions.Count} region{(regions.Count != 1 ? "s" : "")}.");
+
+                                    if (regions.Count > 0)
+                                    {
+                                        if (cellCopy == null)
+                                            cellCopy = cell.DeepCopy();
+                                        if (cellCopy.Regions == null)
+                                            cellCopy.Regions = new();
+
+                                        cellCopy.Regions.AddRange(regions);
+                                        cellChanged = true;
+                                        ++totalCellChangeCount;
+                                        processed.Add(cell.FormKey);
+                                    }
+                                }
+                                if (cellChanged)
+                                {
+                                    if (subblockCopy == null)
+                                        subblockCopy = subblock.DeepCopy();
+                                    subblockCopy!.Items[cellIndex] = cellCopy! as Cell;
+                                    ++subblockChanges;
+                                }
+                                ++cellIndex;
+                            }
+                            if (subblockChanges > 0)
+                            {
+                                if (blockCopy == null)
+                                    blockCopy = block.DeepCopy();
+                                blockCopy!.Items[subblockIndex] = subblockCopy!;
+                                ++blockChanges;
+                            }
+                            ++subblockIndex;
+                        } //< SUBBLOCK
+
+                        if (blockChanges > 0)
+                        {
+                            if (worldCopy == null)
+                                worldCopy = world.DeepCopy();
+                            worldCopy.SubCells[blockIndex] = blockCopy!;
+                            ++worldChanges;
+                        }
+                        ++blockIndex;
+                    } //< BLOCK
+
+                    if (worldChanges > 0)
+                    {
+                        state.PatchMod.Worldspaces.Set(worldCopy!);
+                        ++changeCount;
+                    }
+                } //< WORLDSPACE
+
+            }
 
             Console.WriteLine("=== Diagnostics ===");
 
             if (changeCount > 0)
-                Console.WriteLine($"Patched {totalCellChangeCount} cells in {changeCount} worldspace{(changeCount != 0 && changeCount > 1 ? "s" : "")}");
+                Console.WriteLine($"Patched {totalCellChangeCount} cells in {changeCount} worldspace{(changeCount != 1 ? "s" : "")}");
             else Console.WriteLine("No changes were made, something probably went wrong!");
 
-            Console.WriteLine("=== Patcher Complete ===");
+            Console.WriteLine("===================");
         }
     }
 }
