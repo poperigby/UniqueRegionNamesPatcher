@@ -9,6 +9,8 @@ using System.Drawing;
 using System.IO;
 using System.Linq;
 using Mutagen.Bethesda.Plugins.Cache;
+using Noggog;
+using System.Text.RegularExpressions;
 
 namespace UniqueRegionNamesPatcher.Utility
 {
@@ -18,41 +20,54 @@ namespace UniqueRegionNamesPatcher.Utility
     public class RegionMap
     {
         /// <summary>
-        /// Constructor that parses an already-serialized file.
-        /// </summary>
-        /// <param name="fileContent"><see cref="byte[]"/> containing the serialized contents of the region map file.</param>
-        /// <param name="state">Reference of the <see cref="IPatcherState"/> object passed to the <see cref="Program.RunPatch(IPatcherState{ISkyrimMod, ISkyrimModGetter})"/> function.</param>
-        //public RegionMap(byte[] fileContent, ref IPatcherState<ISkyrimMod, ISkyrimModGetter> state)
-        //{
-        //    Map = new();
-        //    Regions = new();
-        //    linkCache = state.PatchMod.ToMutableLinkCache();
-        //    Parse(new MemoryStream(fileContent), ref state);
-        //}
-        /// <summary>
         /// Constructor that accepts a pre-defined <see cref="Stream"/> object.
         /// </summary>
         /// <param name="stream">A pre-defined <see cref="Stream"/> derived object.</param>
         /// <param name="state">Reference of the <see cref="IPatcherState"/> object passed to the <see cref="Program.RunPatch(IPatcherState{ISkyrimMod, ISkyrimModGetter})"/> function.</param>
-        public RegionMap(Stream stream, ref IPatcherState<ISkyrimMod, ISkyrimModGetter> state)
+        public RegionMap(Stream stream, FormKey worldspaceFormKey, ref IPatcherState<ISkyrimMod, ISkyrimModGetter> state)
         {
             Map = new();
             Regions = new();
+            _worldspaceFormKey = worldspaceFormKey;
             linkCache = state.PatchMod.ToMutableLinkCache();
-            Parse(stream, ref state);
+            var (regions, holdmap) = SplitStream(stream);
+            ParseRegions(regions.Item1, regions.Item2, ref state);
+            ParseHoldMap(holdmap.Item1, holdmap.Item2, ref state);
+        }
+
+        internal enum FileHeader : byte
+        {
+            Null = 0,
+            Regions = 1,
+            HoldMap = 2,
         }
 
         /// <summary>
-        /// Parses the given stream, and populates the <see cref="Map"/> and <see cref="Regions"/> members.
+        /// This is the <see cref="IPatcherState.PatchMod"/>'s <see cref="ILinkCache"/>, for use when resolving records.
         /// </summary>
-        /// <param name="stream">A <see cref="Stream"/> object with the contents of the region map file.</param>
-        /// <param name="state">Reference of the <see cref="IPatcherState"/> object passed to the <see cref="Program.RunPatch(IPatcherState{ISkyrimMod, ISkyrimModGetter})"/> function.</param>
-        private void Parse(Stream stream, ref IPatcherState<ISkyrimMod, ISkyrimModGetter> state)
+        private readonly ILinkCache linkCache;
+
+        public List<RegionWrapper> Regions { get; private set; }
+        public Dictionary<Point, List<FormLink<IRegionGetter>>> Map { get; private set; }
+        private readonly FormKey _worldspaceFormKey;
+
+        /// <summary>
+        /// Splits the given stream using INI-style <see cref="FileHeader"/>s.
+        /// The returned streams do not contain the headers themselves.
+        /// </summary>
+        /// <param name="stream">Input stream containing the whole file.</param>
+        /// <returns><list type="table">
+        /// <item><term>Item1</term><description>Stream containing the contents of the '[Regions]' header.</description></item>
+        /// <item><term>Item2</term><description>Stream containing the contents of the '[HoldMap]' header.</description></item>
+        /// </list></returns>
+        private ((Stream, int), (Stream, int)) SplitStream(Stream stream)
         {
             using StreamReader sr = new(stream);
 
-            string header = string.Empty;
-            bool doRead = false;
+            FileHeader currentHeader = FileHeader.Null;
+
+            Stream regions = new MemoryStream(), holdMap = new MemoryStream();
+            int regionsBeginIndex = -1, holdMapBeginIndex = -1;
 
             int ln = 0;
             for (string? line = sr.ReadLine(); !sr.EndOfStream; line = sr.ReadLine(), ++ln)
@@ -66,81 +81,179 @@ namespace UniqueRegionNamesPatcher.Utility
                 if (line.Length == 0)
                     continue;
 
+                if (!line.EndsWith('\n'))
+                    line += '\n';
+
                 // check for an INI header:
-                int eq = line.IndexOf('='), open = line.IndexOf('['), close = line.IndexOf(']');
+                int open = line.IndexOf('['), close = line.IndexOf(']');
 
-                if (eq == -1 && open != -1 && close != -1)
+                if (!line.Contains('=') && open != -1 && close != -1)
                 {
-                    header = line[(open + 1)..close];
-                    doRead = header.Equals("HoldMap", StringComparison.Ordinal);
-                }
-                else if (doRead)
-                {
-                    if (eq == -1)
-                        continue;
-
-                    // parse the key (coordinate)
-                    var coord = line[..eq].RemoveAll('(', ')', ' ').ParsePoint();
-                    if (coord == null)
+                    string header = line[(open + 1)..close];
+                    if (Enum.TryParse(typeof(FileHeader), header, true, out object? result) && result is FileHeader head)
                     {
-                        Console.WriteLine($"[WARNING]\tLine {ln} contains an invalid coordinate string! ('{line}')");
-                        continue;
-                    }
-
-                    // parse the value (region name list)
-                    string value = line[(eq + 1)..].Trim();
-                    var regionNames = value.ParseArray();
-                    byte priority = 56; //< TODO:  Use dynamic priority, as in the original mod
-
-                    List<FormLink<IRegionGetter>> links = new();
-
-                    foreach (string editorID in regionNames)
-                    {
-                        // check for an already existing region (added by this patcher only) with the given editor ID (name)
-                        RegionWrapper? existing = Regions.FirstOrDefault(r => r != null && editorID.Equals(r.EditorID, StringComparison.Ordinal), null);
-
-                        if (existing == null)
+                        currentHeader = head;
+                        switch (head)
                         {
-                            string mapName = editorID.ParseRegionMapName();
-                            var region = new Region(state.PatchMod.GetNextFormKey(), state.GameRelease.ToSkyrimRelease())
+                        case FileHeader.Regions: regionsBeginIndex = ln; break;
+                        case FileHeader.HoldMap: holdMapBeginIndex = ln; break;
+                        default: break;
+                        }
+                    }
+                    else currentHeader = FileHeader.Null;
+                }
+                else if (currentHeader == FileHeader.Regions)
+                {
+                    regions.Write(line.ToBytes());
+                }
+                else if (currentHeader == FileHeader.HoldMap)
+                {
+                    holdMap.Write(line.ToBytes());
+                }
+            }
+
+            regions.WriteByte((byte)'\n');
+            regions.Seek(0, SeekOrigin.Begin);
+            holdMap.WriteByte((byte)'\n');
+            holdMap.Seek(0, SeekOrigin.Begin);
+
+            return ((regions, regionsBeginIndex), (holdMap, holdMapBeginIndex));
+        }
+
+        private void ParseRegions(Stream stream, int startIndex, ref IPatcherState<ISkyrimMod, ISkyrimModGetter> state)
+        {
+            using StreamReader sr = new(stream);
+
+            int ln = startIndex + 1;
+            for (string? line = sr.ReadLine(); !sr.EndOfStream; line = sr.ReadLine(), ++ln)
+            {
+                if (line == null || line.Length == 0)
+                    continue;
+
+                int eq = line.IndexOf('=');
+
+                if (eq == -1)
+                    continue;
+
+                string // get the key & value from this line
+                    editorID = line[..eq].Trim(),
+                    value = line[(eq + 1)..].Trim('[', ']', ' ', '\n');
+
+                // parse the value's point list
+                ExtendedList<P2Float> pointList = new();
+                
+                foreach (string point in Regex.Matches(value, "\\([\\-0-9]+,[\\-0-9]+\\)").Cast<Match>().Select(m => m.Value))
+                {
+                    var p = point.ParsePoint();
+
+                    if (p == null)
+                        throw new FormatException($"Invalid point '{point}' at line {ln}! (Key '{editorID}')");
+
+                    pointList.Add(new P2Float(p.Value.X * 4096, p.Value.Y * 4096));
+                }
+
+                byte priority = 56; //< TODO:  Use dynamic priority, as in the original mod
+
+                // check for an already existing region (added by this patcher only) with the given editor ID (name)
+                RegionWrapper? existing = Regions.FirstOrDefault(r => r != null && editorID.Equals(r.EditorID, StringComparison.Ordinal), null);
+
+                if (existing == null)
+                {
+                    string mapName = editorID.ParseRegionMapName();
+                    var region = new Region(state.PatchMod.GetNextFormKey(), state.GameRelease.ToSkyrimRelease())
+                    {
+                        EditorID = editorID,
+                        // Region Data
+                        Map = new Mutagen.Bethesda.Skyrim.RegionMap()
+                        {
+                            Name = mapName,
+                            Header = new RegionMapDataHeader()
                             {
-                                EditorID = editorID,
-                                // Region Data
-                                Map = new Mutagen.Bethesda.Skyrim.RegionMap()
-                                {
-                                    Name = mapName,
-                                    Header = new RegionMapDataHeader()
-                                    {
-                                        DataType = RegionData.RegionDataType.Map,
-                                        Priority = priority,
-                                        Flags = RegionData.RegionDataFlag.Override
-                                    },
-                                },
-                                // Region Areas
-                                RegionAreas = new()
-                                {
-                                    new() // Region Area #0
-                                    {
-                                        EdgeFallOff = 1024
-                                    }
-                                }
-                            };
-
-                            region.Worldspace.SetTo(Skyrim.Worldspace.Tamriel.FormKey);
-
-                            state.PatchMod.Regions.Add(region);
-
-                            Regions.Add(new(editorID, region.FormKey, mapName));
-                            links.Add(region.FormKey);
-                        }
-                        else
+                                DataType = RegionData.RegionDataType.Map,
+                                Priority = priority,
+                                Flags = RegionData.RegionDataFlag.Override
+                            },
+                        },
+                        // Region Areas
+                        RegionAreas = new()
                         {
-                            links.Add(existing.FormLink);
+                            new() // Region Area #0
+                            {
+                                EdgeFallOff = 1024,
+                                RegionPointListData = pointList
+                            }
                         }
-                    }
+                    };
 
-                    Map.Add(coord.Value, links);
+                    region.Worldspace.SetTo(_worldspaceFormKey);
+
+                    state.PatchMod.Regions.Add(region);
+
+                    Regions.Add(new(editorID, region.FormKey, mapName));
                 }
+            }
+        }
+
+        /// <summary>
+        /// Parses the given stream, and populates the <see cref="Map"/> and <see cref="Regions"/> members.
+        /// </summary>
+        /// <remarks><b>THIS MUST BE CALLED AFTER <see cref="ParseRegions(Stream, int, ref IPatcherState{ISkyrimMod, ISkyrimModGetter})"/>!</b></remarks>
+        /// <param name="stream">A <see cref="Stream"/> object with the contents of the region map file.</param>
+        /// <param name="startIndex">The line number that this stream section begins at.</param>
+        /// <param name="state">Reference of the <see cref="IPatcherState"/> object passed to the <see cref="Program.RunPatch(IPatcherState{ISkyrimMod, ISkyrimModGetter})"/> function.</param>
+        private void ParseHoldMap(Stream stream, int startIndex, ref IPatcherState<ISkyrimMod, ISkyrimModGetter> state)
+        {
+            using StreamReader sr = new(stream);
+
+            if (Regions.Count == 0)
+                throw new Exception("Invalid [Regions] map doesn't contain any data!");
+
+            int ln = startIndex + 1;
+            for (string? line = sr.ReadLine(); !sr.EndOfStream; line = sr.ReadLine(), ++ln)
+            {
+                if (line == null || line.Length == 0)
+                    continue;
+
+                // check for an INI header:
+                int eq = line.IndexOf('=');
+
+
+                if (eq == -1)
+                    continue;
+
+                // parse the key (coordinate)
+                var coord = line[..eq].RemoveAll('(', ')', ' ').ParsePoint();
+                if (coord == null)
+                {
+                    Console.WriteLine($"[WARNING]\tLine {ln} contains an invalid coordinate string! ('{line}')");
+                    continue;
+                }
+
+                // parse the value (region name list)
+                string value = line[(eq + 1)..].Trim();
+
+                List<string> regionNames = new();
+                foreach (string elem in value.Trim('[', ']').Split(',', StringSplitOptions.RemoveEmptyEntries))
+                {
+                    string e = elem.Trim('"');
+                    if (e.Length > 0)
+                        regionNames.Add(e);
+                }
+
+                List<FormLink<IRegionGetter>> links = new();
+
+                foreach (string editorID in regionNames)
+                {
+                    // check for an already existing region (added by this patcher only) with the given editor ID (name)
+                    RegionWrapper? existing = Regions.FirstOrDefault(r => r != null && editorID.Equals(r.EditorID, StringComparison.Ordinal), null);
+
+                    if (existing == null)
+                        throw new Exception($"Hold with editor ID '{editorID}' doesn't have any valid area data!");
+
+                    links.Add(existing.FormLink);
+                }
+
+                Map.Add(coord.Value, links);
             }
         }
 
@@ -167,13 +280,5 @@ namespace UniqueRegionNamesPatcher.Utility
 
             return links;
         }
-
-        /// <summary>
-        /// This is the <see cref="IPatcherState.PatchMod"/>'s <see cref="ILinkCache"/>, for use when resolving records.
-        /// </summary>
-        private readonly ILinkCache linkCache;
-
-        public List<RegionWrapper> Regions { get; private set; }
-        public Dictionary<Point, List<FormLink<IRegionGetter>>> Map { get; private set; }
     }
 }

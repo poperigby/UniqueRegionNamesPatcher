@@ -1,6 +1,6 @@
 {
   "Nickname": "UniqueRegionNamesPatcher",
-  "Visibility": "Hidden",
+  "Visibility": "Visible",
   "OneLineDescription": "Synthesis patcher that replaces the 'Unique Region Names' mod.",
   "LongDescription": "[NOTE]:  This is NOT compatible with the unique region names mod, it is designed to replace it!",
   "PreferredAutoVersioning": "Default",

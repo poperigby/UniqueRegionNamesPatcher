@@ -63,9 +63,9 @@ namespace UniqueRegionNamesPatcher.Properties {
         /// <summary>
         ///   Looks up a localized resource of type System.Byte[].
         /// </summary>
-        internal static byte[] cellmap {
+        internal static byte[] tamriel {
             get {
-                object obj = ResourceManager.GetObject("cellmap", resourceCulture);
+                object obj = ResourceManager.GetObject("tamriel", resourceCulture);
                 return ((byte[])(obj));
             }
         }
