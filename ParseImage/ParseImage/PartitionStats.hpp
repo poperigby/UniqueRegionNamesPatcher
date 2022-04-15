@@ -242,9 +242,9 @@ struct RegionStats : std::vector<Point> {
 			position y_offset{ 0 };
 			// if we're in the first half of the vector, shift all Y axis points up by 1
 			if (std::distance(it, vecFirst.begin()) < vecFirstHalfSize)
-				++y_offset;
+				--y_offset;
 			// else shift all Y axis points down by 1
-			else --y_offset;
+			else ++y_offset;
 			// shift all first points left by 1
 			edge.emplace_back(Point{ it->x() - 1, it->y() + y_offset });
 		}
