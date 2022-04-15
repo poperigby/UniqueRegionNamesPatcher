@@ -44,8 +44,8 @@ constexpr Point offsetCellCoordinates(const Point& p, const Point& pMin = { 0, 0
 	} };
 
 	return{
-		translateAxis(p.x, pMin.x, pMax.x, cellMin.x, cellMax.x),
-		translateAxis(p.y, pMin.y, pMax.y, cellMin.y, cellMax.y)
+		translateAxis(p.x(), pMin.x(), pMax.x(), cellMin.x(), cellMax.x()),
+		translateAxis(p.y(), pMin.y(), pMax.y(), cellMin.y(), cellMax.y())
 	};
 }
 
@@ -150,16 +150,18 @@ int main(const int argc, char** argv)
 
 					if (const auto& dimArg{ args.typegetv_any<opt::Flag, opt::Option>('d', "dim") }; dimArg.has_value()) {
 						Size partSize = parse_string<Size>(dimArg.value(), ":,");
-						std::clog << "Partition Size:  [ " << partSize.width << " x " << partSize.height << " ]\n";
+						std::clog << "Partition Size:  [ " << partSize.width() << " x " << partSize.height() << " ]\n";
 
-						const length& cols{ img.image.cols / partSize.width };
-						const length& rows{ img.image.rows / partSize.height };
+						const length& cols{ img.image.cols / partSize.width() };
+						const length& rows{ img.image.rows / partSize.height() };
 
 						bool display_each{ args.checkopt("display") };
 						const std::string windowName{ "Display" };
 
 						if (display_each)
 							cv::namedWindow(windowName); // open a window
+
+						RegionStatsMap regionStats;
 
 						HoldMap vec;
 						vec.reserve(cols * rows);
@@ -168,13 +170,14 @@ int main(const int argc, char** argv)
 						const auto t_start{ CLK::now() };
 
 						for (length y{ 0 }; y < rows; ++y) {
+							unsigned row_count{ 0u };
 							for (length x{ 0 }; x < cols; ++x, ++i) {
-								const auto& rect{ Rectangle(x * partSize.width, y * partSize.height, partSize.width, partSize.height) };
+								const auto& rect{ Rectangle(x * partSize.width(), y * partSize.height(), partSize.width(), partSize.height()) };
 								auto part{ img.image(rect) };
 								const auto& cellPos{ offsetCellCoordinates(Point{ x, y }) };
 								std::clog << "Processing Partition #" << color::setcolor::green << i << color::setcolor::reset << '\n'
 									<< "  Partition Index:   ( " << color::setcolor::yellow << x << color::setcolor::reset << ", " << color::setcolor::yellow << y << color::setcolor::reset << " )\n"
-									<< "  Cell Coordinates:  ( " << color::setcolor::yellow << cellPos.x << color::setcolor::reset << ", " << color::setcolor::yellow << cellPos.y << color::setcolor::reset << " )\n";
+									<< "  Cell Coordinates:  ( " << color::setcolor::yellow << cellPos.x() << color::setcolor::reset << ", " << color::setcolor::yellow << cellPos.y() << color::setcolor::reset << " )\n";
 								if (display_each) {
 									cv::imshow(windowName, part); // display the image in the window
 									cv::waitKey(windowTimeout);
@@ -182,10 +185,17 @@ int main(const int argc, char** argv)
 								if (PartitionStats stats(std::move(part), colormap); stats.valid() && !stats.empty()) {
 									if (auto regions{ stats.getRegions(pxThreshold) }; !regions.empty()) {
 										std::clog << "  " << color::setcolor::cyan << regions << color::setcolor::reset << '\n';
+										for (const auto& it : regions)
+											regionStats[it].emplace_back(cellPos);
 										vec.emplace_back(std::make_pair(cellPos, std::move(regions)));
+										++row_count;
 									}
-									else std::clog << "  " << color::setcolor::red << "No regions above threshold." << color::setcolor::reset;
+									else std::clog << "  " << color::setcolor::red << "No regions above threshold." << color::setcolor::reset << '\n';
 								}
+							}
+							if (row_count == 0u && !regionStats.empty()) {
+								std::clog << "Breaking early because row with index " << color::setcolor::yellow << y << color::setcolor::reset << " didn't contain anything, and it is unlikely that anything else exists." << std::endl;
+								break;
 							}
 						}
 
@@ -204,7 +214,7 @@ int main(const int argc, char** argv)
 						outpath.replace_extension(".ini");
 						if (const auto& outArg{ args.typegetv_any<opt::Flag, opt::Option>('o', "out") }; outArg.has_value())
 							outpath = outArg.value(); // override the output path
-						if (file::write(outpath, "\n[HoldMap]\n", vec)) {
+						if (file::write(outpath, "[Regions]\n", regionStats, "\n[HoldMap]\n", vec)) {
 							std::clog << "Successfully saved the lookup matrix to " << outpath << std::endl;
 						}
 						else throw make_exception("Failed to write to output file ", outpath, "!");

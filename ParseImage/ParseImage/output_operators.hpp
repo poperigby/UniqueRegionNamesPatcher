@@ -1,5 +1,6 @@
 #pragma once
 #include "types.hpp"
+#include "PartitionStats.hpp"
 
 #include <strmath.hpp>
 
@@ -14,25 +15,34 @@ inline std::ostream& operator<<(std::ostream& os, const std::vector<Region>& reg
 	return os << " ]";
 }
 
-inline std::ostream& operator<<(std::ostream& os, const RGB& rgb)
-{
-	for (int i{ 0 }; i < rgb.channel_count(); ++i) {
-
-	}
-
-	std::string n{ str::fromBase10(rgb.r(), 16) };
-	if (n.size() < 2ull)
-		os << '0';
-	os << n;
-	n = str::fromBase10(rgb.g(), 16);
-	str::fromBase10(rgb.b(), 16);
-	return os << '#' << str::stringify(std::hex, static_cast<short>(rgb.r()), static_cast<short>(rgb.g()), static_cast<short>(rgb.b())) << '\n';
-}
-
 // file writing operators:
 inline std::ostream& operator<<(std::ostream& os, const HoldMap& holdmap)
 {
 	for (const auto& [pos, regions] : holdmap)
-		os << '(' << pos.first << ',' << pos.second << ") = " << regions << '\n';
+		os << '(' << pos.x() << ',' << pos.y() << ") = " << regions << '\n';
+	return os;
+}
+
+inline std::ostream& operator<<(std::ostream& os, const Point& p)
+{
+	return os << p.x() << "," << p.y();
+}
+
+inline std::ostream& operator<<(std::ostream& os, const RegionStats& stats)
+{
+	os << '[';
+	const auto& filtered{ stats.filter_region_area() };
+	for (auto it{ filtered.begin() }, end{ filtered.end() }; it != end; ++it) {
+		os << '"' << *it << '"';
+		if (std::distance(it, end) > 1ull)
+			os << ", ";
+	}
+	return os << ']';
+}
+
+inline std::ostream& operator<<(std::ostream& os, const RegionStatsMap& regions)
+{
+	for (const auto& [region, stats] : regions)
+		os << region.Name() << " = " << stats << '\n';
 	return os;
 }

@@ -25,21 +25,24 @@ template<std::integral T>
 struct basic_point : std::pair<T, T> {
 	using base = std::pair<T, T>;
 
-	T& x;
-	T& y;
+	constexpr basic_point(const T& x, const T& y) : base(x, y) {}
 
-	constexpr basic_point(const T& x, const T& y) : base(x, y), x{ this->first }, y{ this->second } {}
+	constexpr T& x() { return this->first; }
+	constexpr T x() const { return this->first; }
+
+	constexpr T& y() { return this->second; }
+	constexpr T y() const { return this->second; }
 
 	basic_point<T>& operator=(const basic_point<T>& o)
 	{
-		x = o.x;
-		y = o.y;
+		x() = o.x();
+		y() = o.y();
 		return *this;
 	}
 
 	// conversion operator
-	operator basic_size<T>() const { return{ x, y }; }
-	operator cv::Point() const { return cv::Point(x, y); }
+	operator basic_size<T>() const { return{ x(), y() }; }
+	operator cv::Point() const { return cv::Point(x(), y()); }
 };
 using Point = basic_point<position>;
 
@@ -48,10 +51,13 @@ template<std::integral T>
 struct basic_size : std::pair<T, T> {
 	using base = std::pair<T, T>;
 
-	T& width;
-	T& height;
+	constexpr basic_size(const T& x, const T& y) : base(x, y) {}
 
-	constexpr basic_size(const T& x, const T& y) : base(x, y), width{ this->first }, height{ this->second } {}
+	constexpr T& width() { return this->first; }
+	constexpr T width() const { return this->first; }
+
+	constexpr T& height() { return this->second; }
+	constexpr T height() const { return this->second; }
 
 	using base::operator=;
 
@@ -59,14 +65,14 @@ struct basic_size : std::pair<T, T> {
 
 	basic_size<T>& operator=(const basic_size<T>& o)
 	{
-		width = o.width;
-		height = o.height;
+		width() = o.width();
+		height() = o.height();
 		return *this;
 	}
 
 	// conversion operator
-	operator basic_point<T>() const { return{ width, height }; }
-	operator cv::Size() const { return cv::Size(width, height); }
+	operator basic_point<T>() const { return{ width(), height() }; }
+	operator cv::Size() const { return cv::Size(width(), height()); }
 };
 using Size = basic_size<position>;
 
@@ -79,7 +85,7 @@ struct basic_rectangle : basic_point<T>, basic_size<T> {
 	basic_rectangle(const T& x, const T& y, const T& width, const T& height) : basepoint(x, y), basesize(width, height) {}
 	basic_rectangle(cv::Rect rect) : basepoint(rect.x, rect.y), basesize(rect.width, rect.height) {}
 
-	operator cv::Rect() const { return cv::Rect{ static_cast<int>(this->x), static_cast<int>(this->y), static_cast<int>(this->width), static_cast<int>(this->height) }; }
+	operator cv::Rect() const { return cv::Rect{ static_cast<int>(this->x()), static_cast<int>(this->y()), static_cast<int>(this->width()), static_cast<int>(this->height()) }; }
 };
 using Rectangle = basic_rectangle<position>;
 
@@ -118,7 +124,7 @@ struct Region : std::pair<ID, std::string> {
 
 	constexpr bool operator==(const Region& o) const { return first == o.first; }
 	constexpr bool operator!=(const Region& o) const { return first != o.first; }
-	
+
 	friend std::ostream& operator<<(std::ostream& os, const Region& region) { return os << region.second; }
 };
 
