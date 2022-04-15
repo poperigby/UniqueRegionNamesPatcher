@@ -1,4 +1,4 @@
-﻿using Mutagen.Bethesda;
+using Mutagen.Bethesda;
 using Noggog;
 using System;
 using System.Collections.Generic;
@@ -39,17 +39,6 @@ namespace UniqueRegionNamesPatcher.Utility
             return s;
         }
         internal static string TrimComments(this string s) => s.TrimComments(new[] { ';', '#' });
-        internal static string[] ParseArray(this string s)
-        {
-            List<string> elements = new();
-            foreach (string elem in s.Trim('[', ']').Split(',', StringSplitOptions.RemoveEmptyEntries))
-            {
-                string e = elem.Trim('"');
-                if (e.Length > 0)
-                    elements.Add(e);
-            }
-            return elements.ToArray();
-        }
         internal static Point? ParsePoint(this string s)
         {
             var split = s.Trim('(', ')').Split(',');

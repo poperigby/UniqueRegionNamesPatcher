@@ -33,7 +33,7 @@ inline std::ostream& operator<<(std::ostream& os, const RegionStats& stats)
 	os << '[';
 	const auto& filtered{ stats.filter_region_area() };
 	for (auto it{ filtered.begin() }, end{ filtered.end() }; it != end; ++it) {
-		os << '"' << *it << '"';
+		os << '(' << *it << ')';
 		if (std::distance(it, end) > 1ull)
 			os << ", ";
 	}

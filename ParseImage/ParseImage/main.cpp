@@ -104,14 +104,18 @@ int main(const int argc, char** argv)
 
 		file::INI ini;
 
-		if (const auto& path{ myPath / "regions.ini" }; file::exists(path))
+		if (const auto& path{ myPath / "regions.ini" }; file::exists(path)) {
+			std::clog << "Reading region color data from " << path << ".\n";
 			ini.read(path);
+		}
 
 		for (const auto& it : args.typegetv_all<opt::Flag, opt::Option>('i', "ini")) {
 			if (!file::exists(it))
 				throw make_exception("Filepath '", it, "' doesn't exist!");
-			else
+			else {
+				std::clog << "Reading region color data from " << it << ".\n";
 				ini.read(it);
+			}
 		}
 
 		if (ini.empty())

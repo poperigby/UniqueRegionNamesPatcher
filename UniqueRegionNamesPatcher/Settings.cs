@@ -31,7 +31,7 @@ namespace UniqueRegionNamesPatcher
 
         public Utility.RegionMap GetRegionMap(ref IPatcherState<ISkyrimMod, ISkyrimModGetter> state)
         {
-            Stream? regionMapStream = null;
+            Stream? regionMapStream;
 
             if (UseCustomRegionMap)
             {
@@ -44,7 +44,8 @@ namespace UniqueRegionNamesPatcher
             else
             {
                 Console.WriteLine("Using integrated region map file.");
-                regionMapStream = new MemoryStream(Properties.Resources.cellmap);
+                // TODO: Allow other default maps to be used depending on the selected worldspace
+                regionMapStream = new MemoryStream(Properties.Resources.tamriel);
             }
 
             if (regionMapStream == null)
@@ -52,7 +53,7 @@ namespace UniqueRegionNamesPatcher
                 throw new Exception("Failed to create a valid stream for parsing the region map!");
             }
 
-            return new(regionMapStream, ref state);
+            return new(regionMapStream, Worldspace.FormKey, ref state);
         }
     }
     public class Settings
@@ -67,7 +68,7 @@ namespace UniqueRegionNamesPatcher
         [Tooltip("Don't modify this unless you know what you're doing!")]
         public List<RegionMapSettings> Worldspaces = new()
         {
-            new(Properties.Resources.cellmap, Mutagen.Bethesda.FormKeys.SkyrimSE.Skyrim.Worldspace.Tamriel),
+            new(Properties.Resources.tamriel, Mutagen.Bethesda.FormKeys.SkyrimSE.Skyrim.Worldspace.Tamriel),
         };
     }
 }
