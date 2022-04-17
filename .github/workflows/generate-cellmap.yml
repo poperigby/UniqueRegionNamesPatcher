@@ -19,101 +19,49 @@ on:
         default:      '0.1'
         type:         string
 
-      name:
-        description:  'Release Name'
-        required:     false
-        default:      ''
-        type:         string
-      tag:
-        description:  'Tag'
-        required:     false
-        default:      ''
-        type:         string
-      is-draft:
-        description:  'Draft'
-        required:     false
-        default:      'true'
-        type:         boolean
-      is-prerelease:
-        description:  'Pre-Release'
-        required:     false
-        default:      'false'
-        type:         boolean
-      autogenerate:
-        description:  'Autogenerate Release Notes'
-        required:     false
-        default:      'false'
-        type:         boolean
-      body:
-        description:  'Description'
-        required:     false
-        default:      ''
-
-env:
-  # [PROJECT_NAME]
-  # Currently this is used for the following scenarios:
-  # - Build Subdirectory Name
-  # - Archive Name Prefix
-  PROJECT_NAME: 'ARRCON'
-  # [BINARY_NAME]
-  # The name of the binary executable file, excluding extensions.
-  # If this is blank, the value specified by '$PROJECT_NAME' is used instead. (See the 'Configure Environment' step.)
-  BINARY_NAME: ''
-  BUILD_TYPE: Release
-
 jobs:
-  create-binaries:
-    runs-on: ${{matrix.os}}
+  generate-cellmap:
+    runs-on: ubuntu-latest
     strategy:
-      matrix:
-        os:         [ ubuntu-latest, windows-2022, macos-latest ] # Use 'windows-2022' instead of 'windows-latest' because it seems to have problems
       fail-fast:    true
 
     steps:
       # Check out the repository
-    - uses: actions/checkout@v2
+    - uses: actions/checkout@v3
       with:
         submodules:   recursive
-        fetch-depth:  0
+        lfs:          true
+        ref:          dev
+
+    - name: 'Setup OpenCV'
+      run:  |
+            apt-get update && apt-get install -y cmake gcc-10 g++-10 wget unzip
+            cd '${{github.workspace}}/ParseImage'
+            wget -O opencv.zip https://github.com/opencv/opencv/archive/4.x.zip
+            unzip opencv.zip && cd 'opencv-4.x'
+            mkdir -p build && cd build
+            cmake ..
+            cmake --build .
+            cmake --install . --config Release
       
-    # Set up platform dependencies
-      # Ninja
+      # Set up ninja
     - uses: seanmiddleditch/gha-setup-ninja@master
-      # MSVC (Windows)
-    - if:   ${{ runner.os == 'Windows' }}
-      uses: ilammy/msvc-dev-cmd@v1
-      # gcc-10 g++-10 zip unzip (Linux)
-    - if:   ${{ runner.os == 'Linux' }}
-      run:  sudo apt-get update && sudo apt-get install gcc-10 g++-10 zip unzip -y
-      
-      
-    # Configure CMake Cache
-      # Windows
-    - name:   Configure CMake (Windows)
-      if:     ${{ runner.os == 'Windows' }}
-      run:    cmake -B '${{github.workspace}}/build' -DCMAKE_BUILD_TYPE=${{env.BUILD_TYPE}} -G Ninja
-      # Linux/macOS
-    - name:   Configure CMake (Linux/macOS)
-      if:     ${{ runner.os != 'Windows' }}
-      run:    cmake -B '${{github.workspace}}/build' -DCMAKE_BUILD_TYPE=${{env.BUILD_TYPE}} -G Ninja
+    
+
+    - name:   Configure CMake
+      run:    cmake -B 'build' -S . -DCMAKE_BUILD_TYPE=Release -DOpenCV_DIR=opencv-4.x -G Ninja
       env:
         CC:   gcc-10
         CXX:  g++-10
 
-    # Build Binary
     - name: Build
-      run:  cmake --build '${{github.workspace}}/build' --config '${{env.BUILD_TYPE}}'
+      run:  cmake --build '${{github.workspace}}/ParseImage' --config Release
       
-    # Create Packaged Release Archive
-      # Windows
-    - name:   Create Archive (Windows)
-      if:     ${{ runner.os == 'Windows' }}
-      run:    |
-              cd "${{github.workspace}}/build/${{env.PROJECT_NAME}}"
-              Compress-Archive "${{env.BINARY_NAME || env.PROJECT_NAME}}.exe" "${{env.PROJECT_NAME}}-$(.\${{env.PROJECT_NAME}} -vq)-Windows.zip"
-      shell:  powershell
-      # Linux / macOS
-    - name:   Create Archive (Linux/macOS)
+    - name: Generate Map
+      run:  |
+            cd ${{github.workspace}}/ParseImage/build/
+
+    - name:   Create Archive
       if:     ${{ runner.os != 'Windows' }}
       run:    |
               cd "${{github.workspace}}/build/${{env.PROJECT_NAME}}"
