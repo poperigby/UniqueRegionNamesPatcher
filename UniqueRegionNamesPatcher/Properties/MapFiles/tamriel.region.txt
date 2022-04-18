@@ -42,6 +42,7 @@ color = 31A037
 priority = 60
 [xxxMapPale]
 color = B57E9B
+mapName = The Pale
 priority = 58
 [xxxMapReach]
 color = 82D37C
