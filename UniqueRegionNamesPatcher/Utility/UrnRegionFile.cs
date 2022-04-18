@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Drawing;
 using System.IO;
@@ -36,7 +36,7 @@ namespace UniqueRegionNamesPatcher.Utility
                 if (tmpEditorID != null) regions.Add(new UrnRegionFileSection()
                 {
                     EditorID = tmpEditorID,
-                    MapName = tmpMapName ?? Regex.Replace(tmpEditorID, "([A-Z])", " $1", RegexOptions.Compiled),
+                    MapName = tmpMapName ?? tmpEditorID.ParseRegionMapName(),
                     Color = tmpColor ?? Color.FromArgb(0, 0, 0),
                     Priority = tmpPriority ?? 60
                 });
