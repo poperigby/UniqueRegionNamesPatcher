@@ -61,12 +61,40 @@ namespace UniqueRegionNamesPatcher.Properties {
         }
         
         /// <summary>
-        ///   Looks up a localized resource of type System.Byte[].
+        ///   Looks up a localized string similar to (-47,49) = [ &quot;xxxMapSea&quot; ]
+        ///(-46,49) = [ &quot;xxxMapSea&quot; ]
+        ///(-45,49) = [ &quot;xxxMapSea&quot; ]
+        ///(-44,49) = [ &quot;xxxMapSea&quot; ]
+        ///(-43,49) = [ &quot;xxxMapSea&quot; ]
+        ///(-42,49) = [ &quot;xxxMapSea&quot; ]
+        ///(-41,49) = [ &quot;xxxMapSea&quot; ]
+        ///(-40,49) = [ &quot;xxxMapSea&quot; ]
+        ///(-39,49) = [ &quot;xxxMapSea&quot; ]
+        ///(-38,49) = [ &quot;xxxMapSea&quot; ]
+        ///(-37,49) = [ &quot;xxxMapSea&quot; ]
+        ///(-36,49) = [ &quot;xxxMapSea&quot; ]
+        ///(-35,49) = [ &quot;xxxMapSea&quot; ]
+        ///(-34,49) = [ &quot;xxxMapSea&quot; ]
+        ///(-33,49) = [ &quot;xxxMapSea&quot; ]
+        ///(-32,49) = [ &quot;xxxMapSea&quot; ]
+        ///(-31,49) = [ &quot;xxxMapSea&quot; ]
+        ///(-30,49) = [ &quot;xxxMapSea&quot; ]
+        ///(-29,49) [rest of string was truncated]&quot;;.
         /// </summary>
-        internal static byte[] tamriel {
+        internal static string tamriel_map {
             get {
-                object obj = ResourceManager.GetObject("tamriel", resourceCulture);
-                return ((byte[])(obj));
+                return ResourceManager.GetString("tamriel_map", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to xxxMapHaafingar = [(-29,17), (-38,20), (-38,21), (-39,22), (-40,23), (-42,24), (-42,25), (-41,26), (-38,27), (-37,28), (-36,29), (-31,30), (-30,31), (-24,32), (-23,33), (-20,34), (-19,35), (-14,35), (-12,32), (-12,31), (-11,30), (-11,29), (-10,28), (-10,27), (-12,26), (-12,25), (-13,24), (-14,23), (-15,22), (-17,21), (-19,20), (-22,19), (-24,18), (-25,17)]
+        ///xxxMapMorthal = [(-12,14), (-12,18), (-8,18), (-8,14)]
+        ///xxxMapHjaalmarch = [(-23,5), (-24,8), (-24,10), (-25,11), (-26,12), (-26,14), (-26,16), (-26,17) [rest of string was truncated]&quot;;.
+        /// </summary>
+        internal static string tamriel_region {
+            get {
+                return ResourceManager.GetString("tamriel_region", resourceCulture);
             }
         }
     }

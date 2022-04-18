@@ -32,127 +32,121 @@ namespace UniqueRegionNamesPatcher
 
             long changeCount = 0, totalCellChangeCount = 0;
 
-            foreach (var WorldspaceSettings in Settings.Worldspaces)
+            UrnRegionMap coordMap = Settings.TamrielSettings.GetUrnRegionMap(ref state);
+
+            if (Settings.verbose)
             {
-                Console.WriteLine($"[Processing Worldspace {WorldspaceSettings.Worldspace.Resolve(state.LinkCache).EditorID}]");
+                Console.WriteLine("Finished parsing region mapping data.");
+                Console.WriteLine($"Parsed {coordMap.Regions.Count} region{(coordMap.Regions.Count != 1 ? "s" : "")} containing {coordMap.Map.Count} cell{(coordMap.Map.Count != 1 ? "s" : "")}:");
+                Console.WriteLine('{');
 
-                Utility.RegionMap coordMap = WorldspaceSettings.GetRegionMap(ref state);
-
-                if (Settings.verbose)
+                int longestEdID = 0, longestName = 0;
+                coordMap.Regions.ForEach(delegate (RegionWrapper rw)
                 {
-                    Console.WriteLine("Finished parsing region mapping data.");
-                    Console.WriteLine($"Parsed {coordMap.Regions.Count} region{(coordMap.Regions.Count != 1 ? "s" : "")} containing {coordMap.Map.Count} cell{(coordMap.Map.Count != 1 ? "s" : "")}:");
-                    Console.WriteLine('{');
+                    if (rw.EditorID.Length > longestEdID)
+                        longestEdID = rw.EditorID.Length;
+                    if (rw.Name != null && rw.Name.Length > longestName)
+                        longestName = rw.Name.Length;
+                });
 
-                    int longestEdID = 0, longestName = 0;
-                    coordMap.Regions.ForEach(delegate (RegionWrapper rw)
-                    {
-                        if (rw.EditorID.Length > longestEdID)
-                            longestEdID = rw.EditorID.Length;
-                        if (rw.Name != null && rw.Name.Length > longestName)
-                            longestName = rw.Name.Length;
-                    });
-
-                    // print results to the console
-                    foreach (var region in coordMap.Regions)
-                    {
-                        Console.WriteLine($"    {{ EditorID: '{region.EditorID}':{new string(' ', longestEdID + 4 - region.EditorID.Length)}Displayname: '{region.Name}'{new string(' ', longestName - region.Name?.Length ?? 0)} }},");
-                    }
-
-                    Console.WriteLine('}');
+                // print results to the console
+                foreach (var region in coordMap.Regions)
+                {
+                    Console.WriteLine($"    {{ EditorID: '{region.EditorID}':{new string(' ', longestEdID + 4 - region.EditorID.Length)}Displayname: '{region.Name}'{new string(' ', longestName - region.Name?.Length ?? 0)} }},");
                 }
 
-                List<FormKey> processed = new();
-
-                foreach (var world in state.LoadOrder.ListedOrder.Worldspace().WinningOverrides())
-                {
-                    if (!world.FormKey.Equals(WorldspaceSettings.Worldspace.FormKey))
-                        continue;
-
-                    int worldChanges = 0;
-
-                    Worldspace? worldCopy = null;
-
-                    int blockIndex = 0;
-                    foreach (var block in world.SubCells)
-                    {
-                        int blockChanges = 0;
-                        WorldspaceBlock? blockCopy = null;
-
-                        int subblockIndex = 0;
-                        foreach (var subblock in block.Items)
-                        {
-                            int subblockChanges = 0;
-                            WorldspaceSubBlock? subblockCopy = null;
-
-                            int cellIndex = 0;
-                            foreach (var cell in subblock.Items)
-                            {
-                                if (processed.Any(f => f.Equals(cell.FormKey)))
-                                    continue;
-
-                                Cell? cellCopy = null;
-
-                                bool cellChanged = false;
-                                if (cell.Grid != null)
-                                {
-                                    Point coord = new(cell.Grid.Point.X, cell.Grid.Point.Y);
-
-                                    var regions = coordMap.GetFormLinksForPos(coord);
-
-                                    string prefix = $"[{coord.X}, {coord.Y}]";
-                                    Console.WriteLine($"{prefix}{new string(' ', 14 - prefix.Length)} Found {regions.Count} region{(regions.Count != 1 ? "s" : "")}.");
-
-                                    if (regions.Count > 0)
-                                    {
-                                        if (cellCopy == null)
-                                            cellCopy = cell.DeepCopy();
-                                        if (cellCopy.Regions == null)
-                                            cellCopy.Regions = new();
-
-                                        cellCopy.Regions.AddRange(regions);
-                                        cellChanged = true;
-                                        ++totalCellChangeCount;
-                                        processed.Add(cell.FormKey);
-                                    }
-                                }
-                                if (cellChanged)
-                                {
-                                    if (subblockCopy == null)
-                                        subblockCopy = subblock.DeepCopy();
-                                    subblockCopy!.Items[cellIndex] = cellCopy! as Cell;
-                                    ++subblockChanges;
-                                }
-                                ++cellIndex;
-                            }
-                            if (subblockChanges > 0)
-                            {
-                                if (blockCopy == null)
-                                    blockCopy = block.DeepCopy();
-                                blockCopy!.Items[subblockIndex] = subblockCopy!;
-                                ++blockChanges;
-                            }
-                            ++subblockIndex;
-                        } //< SUBBLOCK
-
-                        if (blockChanges > 0)
-                        {
-                            if (worldCopy == null)
-                                worldCopy = world.DeepCopy();
-                            worldCopy.SubCells[blockIndex] = blockCopy!;
-                            ++worldChanges;
-                        }
-                        ++blockIndex;
-                    } //< BLOCK
-
-                    if (worldChanges > 0)
-                    {
-                        state.PatchMod.Worldspaces.Set(worldCopy!);
-                        ++changeCount;
-                    }
-                } //< WORLDSPACE
-
+                Console.WriteLine('}');
             }
+
+            List<FormKey> processed = new();
+
+            foreach (var world in state.LoadOrder.ListedOrder.Worldspace().WinningOverrides())
+            {
+                if (!world.FormKey.Equals(TamrielSettings.Worldspace.FormKey))
+                    continue;
+
+                int worldChanges = 0;
+
+                Worldspace? worldCopy = null;
+
+                int blockIndex = 0;
+                foreach (var block in world.SubCells)
+                {
+                    int blockChanges = 0;
+                    WorldspaceBlock? blockCopy = null;
+
+                    int subblockIndex = 0;
+                    foreach (var subblock in block.Items)
+                    {
+                        int subblockChanges = 0;
+                        WorldspaceSubBlock? subblockCopy = null;
+
+                        int cellIndex = 0;
+                        foreach (var cell in subblock.Items)
+                        {
+                            if (processed.Any(f => f.Equals(cell.FormKey)))
+                                continue;
+
+                            Cell? cellCopy = null;
+
+                            bool cellChanged = false;
+                            if (cell.Grid != null)
+                            {
+                                Point coord = new(cell.Grid.Point.X, cell.Grid.Point.Y);
+
+                                var regions = coordMap.GetFormLinksForPos(coord);
+
+                                string prefix = $"[{coord.X}, {coord.Y}]";
+                                Console.WriteLine($"{prefix}{new string(' ', 14 - prefix.Length)} Found {regions.Count} region{(regions.Count != 1 ? "s" : "")}.");
+
+                                if (regions.Count > 0)
+                                {
+                                    if (cellCopy == null)
+                                        cellCopy = cell.DeepCopy();
+                                    if (cellCopy.Regions == null)
+                                        cellCopy.Regions = new();
+
+                                    cellCopy.Regions.AddRange(regions);
+                                    cellChanged = true;
+                                    ++totalCellChangeCount;
+                                    processed.Add(cell.FormKey);
+                                }
+                            }
+                            if (cellChanged)
+                            {
+                                if (subblockCopy == null)
+                                    subblockCopy = subblock.DeepCopy();
+                                subblockCopy!.Items[cellIndex] = cellCopy! as Cell;
+                                ++subblockChanges;
+                            }
+                            ++cellIndex;
+                        }
+                        if (subblockChanges > 0)
+                        {
+                            if (blockCopy == null)
+                                blockCopy = block.DeepCopy();
+                            blockCopy!.Items[subblockIndex] = subblockCopy!;
+                            ++blockChanges;
+                        }
+                        ++subblockIndex;
+                    } //< SUBBLOCK
+
+                    if (blockChanges > 0)
+                    {
+                        if (worldCopy == null)
+                            worldCopy = world.DeepCopy();
+                        worldCopy.SubCells[blockIndex] = blockCopy!;
+                        ++worldChanges;
+                    }
+                    ++blockIndex;
+                } //< BLOCK
+
+                if (worldChanges > 0)
+                {
+                    state.PatchMod.Worldspaces.Set(worldCopy!);
+                    ++changeCount;
+                }
+            } //< WORLDSPACE
 
             Console.WriteLine("=== Diagnostics ===");
 
