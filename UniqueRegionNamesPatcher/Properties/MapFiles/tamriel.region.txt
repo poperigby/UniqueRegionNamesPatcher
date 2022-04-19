@@ -1,8 +1,9 @@
 [xxxMapCastleVolkihar]
-color = 
+color = FF3A4B
 priority = 35
 [xxxMapCollege]
-color = AE91FF
+color = BFD1FF
+mapName = College of Winterhold
 priority = 60
 [xxxMapDawnstar]
 color = B57EFF
@@ -14,7 +15,7 @@ priority = 60
 color = 80B8CE
 priority = 57
 [xxxMapFalkreath]
-color = 
+color = D8FF00
 priority = 60
 [xxxMapFalkreathHold]
 color = D8FF77
@@ -29,13 +30,13 @@ priority = 60
 color = 317037
 priority = 59
 [xxxMapIvarstead]
-color = 
+color = FF7AFF
 priority = 60
 [xxxMapKarthwasten]
 color = 82D3AA
 priority = 61
 [xxxMapKynesgrove]
-color = 
+color = 80FFCE
 priority = 60
 [xxxMapMorthal]
 color = 31A037
@@ -46,9 +47,11 @@ mapName = The Pale
 priority = 58
 [xxxMapReach]
 color = 82D37C
+mapName = The Reach
 priority = 60
 [xxxMapRift]
 color = BC7AFF
+mapName = The Rift
 priority = 58
 [xxxMapRiverwood]
 color = FFB67C
@@ -61,7 +64,7 @@ color = 004CFF
 mapName = The Sea of Ghosts
 priority = 55
 [xxxMapShorsStone]
-color = 
+color = FF51F9
 priority = 60
 [xxxMapThroat]
 color = FFFFFF
@@ -71,7 +74,7 @@ priority = 55
 color = FFD37C
 priority = 56
 [xxxMapWinterhold]
-color = BFD1FF
+color = BFFFFF
 priority = 60
 [xxxMapWinterholdHold]
 color = BFD1BC
