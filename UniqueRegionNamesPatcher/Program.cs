@@ -31,20 +31,31 @@ namespace UniqueRegionNamesPatcher
 
             foreach (var cellContext in state.LoadOrder.PriorityOrder.Cell().WinningContextOverrides(state.LinkCache))
             {
+                // filter out unwanted cells
                 var cell = cellContext.Record;
 
                 if (cell.Flags.HasFlag(Cell.Flag.IsInteriorCell))
-                    continue;
+                    continue; //< is an interior cell
                 else if (cell.Grid is null)
-                {
+                { // doesn't have a grid position:
                     Console.WriteLine($"Exterior cell '{cell.Name?.String ?? cell.EditorID ?? cell.FormKey.IDString()}' does not have a 'Grid' subrecord!");
                     continue;
                 }
+                else if (!cellContext.TryGetParent<IWorldspaceGetter>(out var worldspace) || !worldspace.FormKey.Equals(TamrielSettings.Worldspace.FormKey))
+                { // isn't located in the Tamriel worldspace
+                    continue;
+                }
+                else if (cell.Grid.Point.X.Equals(0) && cell.Grid.Point.Y.Equals(0) && cell.EditorID is null && cell.Name is null)
+                { // is a persistent worldspace cell:
+                    Console.WriteLine($"Skipping persistent worldspace cell '{cell.FormKey.IDString()}'");
+                    continue;
+                }
 
+                // get regions:
                 var regions = coordMap.GetFormLinksForPos(cell.Grid.Point);
 
                 if (regions.Count.Equals(0))
-                {
+                { // no regions matching this position:
                     Console.WriteLine($"No region data found for exterior cell '{cell.Name?.String ?? cell.EditorID ?? cell.FormKey.IDString()}' {cell.Grid.Point}.");
                     continue;
                 }
