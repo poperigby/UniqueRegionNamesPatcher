@@ -42,7 +42,7 @@ namespace UniqueRegionNamesPatcher
                     continue;
                 }
                 else if (!cellContext.TryGetParent<IWorldspaceGetter>(out var worldspace) || !worldspace.FormKey.Equals(TamrielSettings.Worldspace.FormKey))
-                { // isn't located in the Tamriel worldspace
+                { // cell isn't located in the Tamriel worldspace:
                     continue;
                 }
                 else if (cell.Grid.Point.X.Equals(0) && cell.Grid.Point.Y.Equals(0) && cell.EditorID is null && cell.Name is null)
