@@ -39,7 +39,7 @@ namespace UniqueRegionNamesPatcher.Utility
             return s;
         }
         internal static string TrimComments(this string s) => s.TrimComments(new[] { ';', '#' });
-        internal static Point? ParsePoint(this string s)
+        internal static P2Int? ParsePoint(this string s)
         {
             var split = s.Trim('(', ')').Split(',');
             if (split.Length == 2)

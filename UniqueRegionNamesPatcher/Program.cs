@@ -8,6 +8,7 @@ using System.Collections.Generic;
 using System.Drawing;
 using System.Linq;
 using System.Threading.Tasks;
+using UniqueRegionNamesPatcher.Extensions;
 using UniqueRegionNamesPatcher.Utility;
 
 namespace UniqueRegionNamesPatcher
@@ -30,129 +31,42 @@ namespace UniqueRegionNamesPatcher
         {
             Console.WriteLine("===================");
 
-            long changeCount = 0, totalCellChangeCount = 0;
-
             UrnRegionMap coordMap = Settings.TamrielSettings.GetUrnRegionMap(ref state);
+            long changeCount = 0;
 
-            if (Settings.verbose)
+            foreach (var cellContext in state.LoadOrder.PriorityOrder.Cell().WinningContextOverrides(state.LinkCache))
             {
-                Console.WriteLine("Finished parsing region mapping data.");
-                Console.WriteLine($"Parsed {coordMap.Regions.Count} region{(coordMap.Regions.Count != 1 ? "s" : "")} containing {coordMap.Map.Count} cell{(coordMap.Map.Count != 1 ? "s" : "")}:");
-                Console.WriteLine('{');
+                var cell = cellContext.Record;
 
-                int longestEdID = 0, longestName = 0;
-                coordMap.Regions.ForEach(delegate (RegionWrapper rw)
+                if (cell.Flags.HasFlag(Cell.Flag.IsInteriorCell))
+                    continue;
+                else if (cell.Grid is null)
                 {
-                    if (rw.EditorID.Length > longestEdID)
-                        longestEdID = rw.EditorID.Length;
-                    if (rw.Name != null && rw.Name.Length > longestName)
-                        longestName = rw.Name.Length;
-                });
-
-                // print results to the console
-                foreach (var region in coordMap.Regions)
-                {
-                    Console.WriteLine($"    {{ EditorID: '{region.EditorID}':{new string(' ', longestEdID + 4 - region.EditorID.Length)}Displayname: '{region.Name}'{new string(' ', longestName - region.Name?.Length ?? 0)} }},");
+                    Console.WriteLine($"Exterior cell '{cell.Name?.String ?? cell.EditorID ?? cell.FormKey.IDString()}' does not have a 'Grid' subrecord!");
+                    continue;
                 }
 
-                Console.WriteLine('}');
+                var regions = coordMap.GetFormLinksForPos(cell.Grid.Point);
+                if (regions.Count > 0 && (cell.Regions is null || !cell.Regions.ContainsAll(regions)))
+                {
+                    var cellState = cellContext.GetOrAddAsOverride(state.PatchMod);
+
+                    if (cellState.Regions is null)
+                        cellState.Regions = new();
+
+                    cellState.Regions.AddRangeIfUnique(regions);
+                    ++changeCount;
+
+                    Console.WriteLine($"Added {regions.Count} regions to exterior cell '{cell.Name?.String ?? cell.EditorID ?? cell.FormKey.IDString()}' {cell.Grid.Point}.");
+                }
+                else
+                    Console.WriteLine($"No region data found for exterior cell '{cell.Name?.String ?? cell.EditorID ?? cell.FormKey.IDString()}' {cell.Grid.Point}.");
             }
 
-            List<FormKey> processed = new();
-
-            foreach (var world in state.LoadOrder.ListedOrder.Worldspace().WinningOverrides())
-            {
-                if (!world.FormKey.Equals(TamrielSettings.Worldspace.FormKey))
-                    continue;
-
-                int worldChanges = 0;
-
-                Worldspace? worldCopy = null;
-
-                int blockIndex = 0;
-                foreach (var block in world.SubCells)
-                {
-                    int blockChanges = 0;
-                    WorldspaceBlock? blockCopy = null;
-
-                    int subblockIndex = 0;
-                    foreach (var subblock in block.Items)
-                    {
-                        int subblockChanges = 0;
-                        WorldspaceSubBlock? subblockCopy = null;
-
-                        int cellIndex = 0;
-                        foreach (var cell in subblock.Items)
-                        {
-                            if (processed.Any(f => f.Equals(cell.FormKey)))
-                                continue;
-
-                            Cell? cellCopy = null;
-
-                            bool cellChanged = false;
-                            if (cell.Grid != null)
-                            {
-                                Point coord = new(cell.Grid.Point.X, cell.Grid.Point.Y);
-
-                                var regions = coordMap.GetFormLinksForPos(coord);
-
-                                string prefix = $"[{coord.X}, {coord.Y}]";
-                                Console.WriteLine($"{prefix}{new string(' ', 14 - prefix.Length)} Found {regions.Count} region{(regions.Count != 1 ? "s" : "")}.");
-
-                                if (regions.Count > 0)
-                                {
-                                    if (cellCopy == null)
-                                        cellCopy = cell.DeepCopy();
-                                    if (cellCopy.Regions == null)
-                                        cellCopy.Regions = new();
-
-                                    cellCopy.Regions.AddRange(regions);
-                                    cellChanged = true;
-                                    ++totalCellChangeCount;
-                                    processed.Add(cell.FormKey);
-                                }
-                            }
-                            if (cellChanged)
-                            {
-                                if (subblockCopy == null)
-                                    subblockCopy = subblock.DeepCopy();
-                                subblockCopy!.Items[cellIndex] = cellCopy! as Cell;
-                                ++subblockChanges;
-                            }
-                            ++cellIndex;
-                        }
-                        if (subblockChanges > 0)
-                        {
-                            if (blockCopy == null)
-                                blockCopy = block.DeepCopy();
-                            blockCopy!.Items[subblockIndex] = subblockCopy!;
-                            ++blockChanges;
-                        }
-                        ++subblockIndex;
-                    } //< SUBBLOCK
-
-                    if (blockChanges > 0)
-                    {
-                        if (worldCopy == null)
-                            worldCopy = world.DeepCopy();
-                        worldCopy.SubCells[blockIndex] = blockCopy!;
-                        ++worldChanges;
-                    }
-                    ++blockIndex;
-                } //< BLOCK
-
-                if (worldChanges > 0)
-                {
-                    state.PatchMod.Worldspaces.Set(worldCopy!);
-                    ++changeCount;
-                }
-            } //< WORLDSPACE
-
-            Console.WriteLine("=== Diagnostics ===");
-
-            if (changeCount > 0)
-                Console.WriteLine($"Patched {totalCellChangeCount} cells in {changeCount} worldspace{(changeCount != 1 ? "s" : "")}");
-            else Console.WriteLine("No changes were made, something probably went wrong!");
+            if (changeCount.Equals(0))
+                Console.WriteLine("No changes were made.");
+            else
+                Console.WriteLine($"Successfully modified {changeCount} cell{(changeCount.Equals(1) ? "" : "s")}.");
 
             Console.WriteLine("===================");
         }

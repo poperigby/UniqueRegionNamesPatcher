@@ -6,7 +6,6 @@ using Mutagen.Bethesda.Synthesis;
 using Noggog;
 using System;
 using System.Collections.Generic;
-using System.Drawing;
 using System.IO;
 using System.Linq;
 using System.Text.RegularExpressions;
@@ -28,11 +27,11 @@ namespace UniqueRegionNamesPatcher.Utility
         public UrnRegionMap(Stream map_stream, Stream region_stream, FormKey worldspaceFormKey, ref IPatcherState<ISkyrimMod, ISkyrimModGetter> state)
         {
             _worldspaceFormKey = worldspaceFormKey;
-            linkCache = state.PatchMod.ToMutableLinkCache();
+            //linkCache = state.PatchMod.ToMutableLinkCache();
             var streams = SplitStream(map_stream);
             ParseRegionAreas(streams[FileHeader.RegionAreas], new(region_stream), ref state);
             ParseHoldMap(streams[FileHeader.HoldMap]);
-            UpdateRegionPriorityLevels(ref state);
+            //UpdateRegionPriorityLevels(ref state);
         }
 
         #endregion Constructors
@@ -68,7 +67,7 @@ namespace UniqueRegionNamesPatcher.Utility
         /// <summary>
         /// This is the <see cref="IPatcherState.PatchMod"/>'s <see cref="ILinkCache"/>, for use when resolving records.
         /// </summary>
-        private readonly ILinkCache linkCache;
+        //private readonly ILinkCache linkCache;
         /// <summary>
         /// List of all custom regions added by the patcher.<br/>
         /// This uses the <see cref="RegionWrapper"/> object to prevent unnecessary LinkCache lookups for trivial information.
@@ -77,7 +76,7 @@ namespace UniqueRegionNamesPatcher.Utility
         /// <summary>
         /// Coordinate:FormLink map used to look up the coordinates of cells.
         /// </summary>
-        public Dictionary<Point, List<FormLink<IRegionGetter>>> Map = new();
+        public Dictionary<P2Int, List<FormLink<IRegionGetter>>> Map = new();
         /// <summary>
         /// The formkey of the worldspace that this RegionMap instance belongs to.
         /// </summary>
@@ -94,7 +93,7 @@ namespace UniqueRegionNamesPatcher.Utility
         /// </summary>
         /// <param name="stream">Stream containing an entire INI file's contents.</param>
         /// <returns>A <see cref="Dictionary{FileHeader, {Stream, int}}"/> of file headers and tuples where <b>Item1</b> is the portion of the stream that contains the members of the associated file header, and <b>Item2</b> is the line number that the header appears on.</returns>
-        private Dictionary<FileHeader, (Stream, int)> SplitStream(Stream stream)
+        private static Dictionary<FileHeader, (Stream, int)> SplitStream(Stream stream)
         {
             using StreamReader sr = new(stream);
 
@@ -176,12 +175,11 @@ namespace UniqueRegionNamesPatcher.Utility
 
                 foreach (string point in Regex.Matches(value, "\\([\\-0-9]+,[\\-0-9]+\\)").Cast<Match>().Select(m => m.Value))
                 {
-                    var p = point.ParsePoint();
-
-                    if (p == null)
-                        throw new FormatException($"Invalid point '{point}' at line {ln}! (Key '{editorID}')");
-
-                    pointList.Add(new P2Float(p.Value.X * 4096, p.Value.Y * 4096));
+                    if (point.ParsePoint() is P2Int p)
+                    {
+                        pointList.Add(new P2Float(p.X * 4096, p.Y * 4096));
+                    }
+                    else throw new FormatException($"Invalid point '{point}' at line {ln}! (Key '{editorID}')");
                 }
 
                 var data = regionData.Regions.FirstOrDefault(r => r.EditorID.Equals(editorID, StringComparison.OrdinalIgnoreCase));
@@ -255,13 +253,11 @@ namespace UniqueRegionNamesPatcher.Utility
                 // check for an INI header:
                 int eq = line.IndexOf('=');
 
-
                 if (eq == -1)
                     continue;
 
                 // parse the key (coordinate)
-                var coord = line[..eq].RemoveAll('(', ')', ' ').ParsePoint();
-                if (coord == null)
+                if (line[..eq].RemoveAll('(', ')', ' ').ParsePoint() is not P2Int coord)
                 {
                     Console.WriteLine($"[WARNING]\tLine {ln} contains an invalid coordinate string! ('{line}')");
                     continue;
@@ -291,7 +287,7 @@ namespace UniqueRegionNamesPatcher.Utility
                     links.Add(existing.FormLink);
                 }
 
-                Map.Add(coord.Value, links);
+                Map.Add(coord, links);
             }
         }
 
@@ -302,7 +298,7 @@ namespace UniqueRegionNamesPatcher.Utility
         /// </summary>
         /// <param name="coord">The coordinates of the cell to check. <b>This MUST be in cell coordinates, NOT Raw/SubBlock/Block coordinates!</b></param>
         /// <returns>List of formlinks to regions associated with this cell.<br/>If <see cref="Map"/> doesn't contain the given point, an empty list is returned.</returns>
-        public List<FormLink<IRegionGetter>> GetFormLinksForPos(Point coord)
+        public List<FormLink<IRegionGetter>> GetFormLinksForPos(P2Int coord)
         {
             List<FormLink<IRegionGetter>> links = new();
 
@@ -321,35 +317,28 @@ namespace UniqueRegionNamesPatcher.Utility
             return links;
         }
 
-        private void UpdateRegionPriorityLevels(ref IPatcherState<ISkyrimMod, ISkyrimModGetter> state)
-        {
-        //    foreach (var rw in Regions)
-        //    {
-        //        IRegionGetter region = rw.FormLink.Resolve(linkCache);
-        //        byte priority = region.Map?.Header?.Priority ?? 60;
+        //private void UpdateRegionPriorityLevels(ref IPatcherState<ISkyrimMod, ISkyrimModGetter> state)
+        //{
+        ////    foreach (var rw in Regions)
+        ////    {
+        ////        IRegionGetter region = rw.FormLink.Resolve(linkCache);
+        ////        byte priority = region.Map?.Header?.Priority ?? 60;
 
-        //        byte highest = 0;
-        //        state.LoadOrder.PriorityOrder.Region().WinningOverrides().ForEach(delegate (IRegionGetter modRegion)
-        //        {
-        //            if (modRegion.Map?.Header?.Priority != null && modRegion.Map.Header.Priority > highest)
-        //                highest = modRegion.Map.Header.Priority;
-        //        });
-        //        // if our region's priority is lower than 
-        //        if (priority < highest)
-        //        {
-        //            var regionCopy = region.DeepCopy();
-        //            regionCopy.Map!.Header!.Priority += Convert.ToByte(highest - priority + 1);
-        //            state.PatchMod.Regions.Set(regionCopy);
-        //        }
-        //    }
-        }
+        ////        byte highest = 0;
+        ////        state.LoadOrder.PriorityOrder.Region().WinningOverrides().ForEach(delegate (IRegionGetter modRegion)
+        ////        {
+        ////            if (modRegion.Map?.Header?.Priority != null && modRegion.Map.Header.Priority > highest)
+        ////                highest = modRegion.Map.Header.Priority;
+        ////        });
+        ////        // if our region's priority is lower than 
+        ////        if (priority < highest)
+        ////        {
+        ////            var regionCopy = region.DeepCopy();
+        ////            regionCopy.Map!.Header!.Priority += Convert.ToByte(highest - priority + 1);
+        ////            state.PatchMod.Regions.Set(regionCopy);
+        ////        }
+        ////    }
+        //}
         #endregion Methods
-    }
-    public static class NumberExtensions
-    {
-        public static decimal Scale(this decimal n, decimal oldMin, decimal oldMax, decimal newMin, decimal newMax)
-        {
-            return newMin + (n - oldMin) * (newMax - newMin) / (oldMax - oldMin);
-        }
     }
 }
