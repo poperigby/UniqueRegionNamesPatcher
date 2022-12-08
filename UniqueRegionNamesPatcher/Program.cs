@@ -47,7 +47,14 @@ namespace UniqueRegionNamesPatcher
                 }
 
                 var regions = coordMap.GetFormLinksForPos(cell.Grid.Point);
-                if (regions.Count > 0 && (cell.Regions is null || !cell.Regions.ContainsAll(regions)))
+
+                if (regions.Count.Equals(0))
+                {
+                    Console.WriteLine($"No region data found for exterior cell '{cell.Name?.String ?? cell.EditorID ?? cell.FormKey.IDString()}' {cell.Grid.Point}.");
+                    continue;
+                }
+
+                if (cell.Regions is null || !cell.Regions.ContainsAll(regions))
                 {
                     var cellState = cellContext.GetOrAddAsOverride(state.PatchMod);
 
@@ -60,7 +67,7 @@ namespace UniqueRegionNamesPatcher
                     Console.WriteLine($"Added {regions.Count} regions to exterior cell '{cell.Name?.String ?? cell.EditorID ?? cell.FormKey.IDString()}' {cell.Grid.Point}.");
                 }
                 else
-                    Console.WriteLine($"No region data found for exterior cell '{cell.Name?.String ?? cell.EditorID ?? cell.FormKey.IDString()}' {cell.Grid.Point}.");
+                    Console.WriteLine($"No new regions to add to exterior cell '{cell.Name?.String ?? cell.EditorID ?? cell.FormKey.IDString()}' {cell.Grid.Point}");
             }
 
             if (changeCount.Equals(0))

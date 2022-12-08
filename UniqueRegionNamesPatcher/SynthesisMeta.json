@@ -1,7 +1,7 @@
 {
-  "Nickname": "Unique Region Names",
+  "Nickname": "Unique Region Names Patcher",
   "Visibility": "Visible",
-  "OneLineDescription": "[BETA] Synthesis patcher that replaces the 'Open Skyrim' text on doors with a location-sensitive region name.",
+  "OneLineDescription": "Replaces the 'Open Skyrim' text on doors with a location-sensitive region name.",
   "LongDescription": "This replaces the original 'Unique Region Names' mod, and should not be used alongside it.\nNote that this patcher is still in beta, and issues may be present.",
   "PreferredAutoVersioning": "Default",
   "RequiredMods": []
