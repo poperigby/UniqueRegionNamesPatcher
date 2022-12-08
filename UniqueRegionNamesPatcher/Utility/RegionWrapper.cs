@@ -10,9 +10,9 @@ namespace UniqueRegionNamesPatcher.Utility
     {
         public RegionWrapper(string editorID, FormLink<IRegionGetter> link, string? mapName = null)
         {
-            EditorID = editorID;
-            FormLink = link;
-            Name = mapName;
+            this.EditorID = editorID;
+            this.FormLink = link;
+            this.Name = mapName;
         }
         public string EditorID { get; }
         public string? Name { get; }

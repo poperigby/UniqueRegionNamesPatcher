@@ -6,7 +6,7 @@ namespace UniqueRegionNamesPatcher.UniqueRegionNames
 {
     public static partial class UniqueRegionNames
     {
-        internal readonly static ModKey ModKey = ModKey.FromNameAndExtension("Unique Region Names.esp");
+        internal static readonly ModKey ModKey = ModKey.FromNameAndExtension("Unique Region Names.esp");
 
         public static class Region
         {

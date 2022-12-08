@@ -1,12 +1,7 @@
 using Mutagen.Bethesda;
-using Mutagen.Bethesda.Plugins;
 using Mutagen.Bethesda.Skyrim;
 using Mutagen.Bethesda.Synthesis;
-using Noggog;
 using System;
-using System.Collections.Generic;
-using System.Drawing;
-using System.Linq;
 using System.Threading.Tasks;
 using UniqueRegionNamesPatcher.Extensions;
 using UniqueRegionNamesPatcher.Utility;

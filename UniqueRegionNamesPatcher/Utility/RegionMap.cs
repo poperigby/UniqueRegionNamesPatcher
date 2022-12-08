@@ -1,6 +1,4 @@
-using Mutagen.Bethesda;
 using Mutagen.Bethesda.Plugins;
-using Mutagen.Bethesda.Plugins.Cache;
 using Mutagen.Bethesda.Skyrim;
 using Mutagen.Bethesda.Synthesis;
 using Noggog;
@@ -29,8 +27,8 @@ namespace UniqueRegionNamesPatcher.Utility
             _worldspaceFormKey = worldspaceFormKey;
             //linkCache = state.PatchMod.ToMutableLinkCache();
             var streams = SplitStream(map_stream);
-            ParseRegionAreas(streams[FileHeader.RegionAreas], new(region_stream), ref state);
-            ParseHoldMap(streams[FileHeader.HoldMap]);
+            this.ParseRegionAreas(streams[FileHeader.RegionAreas], new(region_stream), ref state);
+            this.ParseHoldMap(streams[FileHeader.HoldMap]);
             //UpdateRegionPriorityLevels(ref state);
         }
 

@@ -1,8 +1,6 @@
 using Mutagen.Bethesda;
 using Noggog;
 using System;
-using System.Collections.Generic;
-using System.Drawing;
 using System.Linq;
 
 namespace UniqueRegionNamesPatcher.Utility
