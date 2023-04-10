@@ -192,15 +192,11 @@ namespace UniqueRegionNamesPatcher.Utility
                         EditorID = editorID,
                         MapColor = data.Color,
                         // Region Data
-                        Map = new Mutagen.Bethesda.Skyrim.RegionMap()
+                        Map = new RegionMap()
                         {
                             Name = data.MapName,
-                            Header = new RegionMapDataHeader()
-                            {
-                                DataType = RegionData.RegionDataType.Map,
-                                Priority = data.Priority,
-                                Flags = RegionData.RegionDataFlag.Override
-                            },
+                            Priority = data.Priority,
+                            Flags = RegionData.RegionDataFlag.Override,
                         },
                         // Region Areas
                         RegionAreas = new()
